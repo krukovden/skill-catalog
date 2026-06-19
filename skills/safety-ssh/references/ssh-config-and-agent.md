@@ -1,20 +1,20 @@
 # SSH config, ssh-agent, and the hardened options
 
-This is the detail behind the alias-only model. You rarely need it for a normal
+This is the detail behind the connection-only model. You rarely need it for a normal
 run — read it when setting up a host or debugging why `check-setup` fails.
 
-## `~/.ssh/config` — the alias that hides everything
+## `~/.ssh/config` — the connection that hides everything
 
-`ssh plcsim-lab` works because a `Host` block maps the alias to the real address,
+`ssh my-server` works because a `Host` block maps the connection to the real address,
 user, port, and key. None of those appear on the command line, in logs, or in
 model context.
 
 ```sshconfig
-Host plcsim-lab                              # the alias you and the agent type
+Host my-server                              # the connection you and the agent type
     HostName 192.168.91.50                   # real IP/DNS — hidden from the CLI
     User labuser                             # login user — no `user@` needed
     Port 22                                  # no `-p` needed
-    IdentityFile ~/.ssh/id_ed25519_plcsim-lab
+    IdentityFile ~/.ssh/id_ed25519_my-server
     IdentitiesOnly yes                       # offer ONLY this key (deterministic auth)
     AddKeysToAgent yes                       # auto-load the key into the agent on use
     ForwardAgent no                          # never forward the agent by default
@@ -40,26 +40,26 @@ copied), then unlock it once into the agent. The agent signs challenges on deman
 the passphrase and key material never reach the AI agent.
 
 ```bash
-ssh-keygen -t ed25519 -C "claude-agent-plcsim-lab"   # prompts for a passphrase
+ssh-keygen -t ed25519 -C "claude-agent-my-server"   # prompts for a passphrase
 ```
 
 **Linux:**
 ```bash
 eval "$(ssh-agent -s)"          # only if $SSH_AUTH_SOCK is unset
-ssh-add ~/.ssh/id_ed25519_plcsim-lab
+ssh-add ~/.ssh/id_ed25519_my-server
 ssh-add -l                      # list loaded keys; ssh-add -D clears them
 ```
 
 **macOS** (persist in Keychain):
 ```bash
-ssh-add --apple-use-keychain ~/.ssh/id_ed25519_plcsim-lab
+ssh-add --apple-use-keychain ~/.ssh/id_ed25519_my-server
 ```
 
 **Windows** (ssh-agent is a Windows service, disabled by default):
 ```powershell
 Get-Service ssh-agent | Set-Service -StartupType Automatic
 Start-Service ssh-agent
-ssh-add $env:USERPROFILE\.ssh\id_ed25519_plcsim-lab
+ssh-add $env:USERPROFILE\.ssh\id_ed25519_my-server
 ```
 After `ssh-add` on Windows the key is held in the agent's credential store and
 survives reboots; Microsoft suggests backing up then removing the on-disk private

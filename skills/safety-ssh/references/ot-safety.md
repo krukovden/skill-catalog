@@ -10,10 +10,10 @@ security incident. So the rule is conservative.
 
 Treat the target as OT/sensitive and apply the gate below if any of these are true:
 
-- the alias name or the user's description mentions a PLC, controller, RTU, HMI,
+- the connection name or the user's description mentions a PLC, controller, RTU, HMI,
   SCADA, historian, PLCSIM, S7, Modbus, Profinet, or a "lab"/"plant"/"OT" host;
 - the user pastes an address in a known OT range (e.g. a segregated `192.168.x`
-  industrial subnet) — note you should be using the *alias*, but if a raw address
+  industrial subnet) — note you should be using the *connection*, but if a raw address
   appears, that is itself a red flag;
 - you are unsure whether the host is IT or OT.
 
@@ -32,9 +32,9 @@ Treat the target as OT/sensitive and apply the gate below if any of these are tr
    If you cannot get all three, do the read-only part and clearly say you are
    stopping short of the change and why.
 
-3. **Never widen access on your own.** Do not add aliases to the allowlist, edit
+3. **Never widen access on your own.** Do not add connections to the allowlist, edit
    `~/.ssh/config`, disable host-key checking, or reach for a password to "make it
-   work". Adding a host is a deliberate human act (run `setup-host`).
+   work". Adding a host is a deliberate human act (run `new-connection`).
 
 4. **Prefer the engineered path.** OT access should go through a hardened jump
    host / industrial DMZ, not straight from a workstation. If the only way you can
@@ -59,6 +59,6 @@ These map to recognized OT-security guidance, which you can cite if the user ask
 This skill exists because automated `claude.exe` → PowerShell → SSH into an OT
 subnet with stored credentials generated exactly such an alert. If the user is
 responding to one: help them answer honestly (what ran, why, under whose
-authorization), switch all future access to the alias + agent model in this skill,
+authorization), switch all future access to the connection + agent model in this skill,
 and remove any stored SSH password from `.env`/scripts. Do not help disguise or
 minimize past activity.

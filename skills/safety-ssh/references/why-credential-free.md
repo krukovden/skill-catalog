@@ -30,7 +30,7 @@ This skill removes all three.
   git, where bots find them within minutes. Any committed secret must be treated as
   compromised and rotated.
 
-- **Alias only, never an IP/host/user.** The alias is a harmless token. Real
+- **Connection only, never an IP/host/user.** The connection is a harmless token. Real
   addresses in commands are what make automated access look like network scanning —
   and they are what end up in logs that a security team reviews. Keeping addresses
   in an admin-owned `~/.ssh/config` means the agent literally cannot disclose them.
@@ -40,8 +40,8 @@ This skill removes all three.
   someone to wire in a stored password. With it, the failure is an immediate
   non-zero exit you can detect and report.
 
-- **Allowlist of approved aliases.** The agent can only reach hosts a human
-  deliberately approved by adding the alias to `~/.ssh/claude-allowed-hosts`. That
+- **Allowlist of approved connections.** The agent can only reach hosts a human
+  deliberately approved by adding the connection to `~/.ssh/claude-allowed-hosts`. That
   file *is* the authorization boundary — visible, auditable, and outside the
   agent's job to edit.
 
@@ -54,5 +54,5 @@ This skill removes all three.
 
 The agent should be able to *initiate* an authenticated action while every secret
 and every address stays structurally **outside anything it can read, log, or
-echo**. It holds one capability — "run a command on the alias `plcsim-lab`" — and
-nothing more. If that capability leaks, what leaked is the word `plcsim-lab`.
+echo**. It holds one capability — "run a command on the connection `my-server`" — and
+nothing more. If that capability leaks, what leaked is the word `my-server`.
