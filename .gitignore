@@ -1,3 +1,6 @@
 node_modules/
 *.log
 .DS_Store
+
+# eval run artifacts (transient)
+skills/*-workspace/
