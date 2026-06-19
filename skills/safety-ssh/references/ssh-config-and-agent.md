@@ -83,6 +83,6 @@ use `ssh-add -c` to require a local confirmation on each key use, and `ssh-add -
 | `ClearAllForwardings=yes` | Strip any port/agent/X11 forwarding regardless of config. |
 
 Server-side backstop (set by whoever owns the host): `PasswordAuthentication no`
-so there is no password to leak, and for an agent account, an `authorized_keys`
-forced command (`restrict,command="..."`) or `sshd_config` `Match ... ForceCommand`
-to limit what the key can do. See `ot-safety.md` for the OT version of this.
+so there is no password to leak, and for a dedicated agent account, an
+`authorized_keys` forced command (`restrict,command="..."`) or `sshd_config`
+`Match ... ForceCommand` to limit what the key can do.

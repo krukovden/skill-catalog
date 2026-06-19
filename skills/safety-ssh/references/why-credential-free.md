@@ -2,12 +2,12 @@
 
 ## The incident pattern this prevents
 
-An AI tool running on a workstation was driven to open PowerShell, SSH into a host
-on an OT subnet using **stored credentials**, and run system/network queries
-against industrial components. To the security team this was indistinguishable
-from an intruder: an automated process authenticating with saved secrets and
-probing a sensitive network. They had to open an investigation and ask for
-business justification, a ticket, and proof of authorization.
+An AI tool running on a workstation was driven to open PowerShell, SSH into a
+server on a restricted internal subnet using **stored credentials**, and run system
+and network queries. To the security team this was indistinguishable from an
+intruder: an automated process authenticating with saved secrets and probing an
+internal network. They had to open an investigation and ask for business
+justification, a ticket, and proof of authorization.
 
 Nothing here required malice — the danger was structural:
 

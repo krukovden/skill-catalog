@@ -15,10 +15,9 @@ description: >-
 
 Run remote commands over SSH **without the assistant ever handling secrets,
 hostnames, or IPs.** Automated SSH from an AI tool that carries stored credentials
-and pokes at raw IP addresses looks exactly like an intrusion to a security team —
-and on operational-technology (OT) networks it can be genuinely dangerous. The fix:
-move every secret and every address *out* of anything the assistant can read, log,
-or echo, and leave it only a harmless **connection name**.
+and pokes at raw IP addresses looks exactly like an intrusion to a security team.
+The fix: move every secret and every address *out* of anything the assistant can
+read, log, or echo, and leave it only a harmless **connection name**.
 
 ## The one rule that makes this safe
 
@@ -108,11 +107,6 @@ connection.
 - **Never authorize a connection for yourself by filling in the values.** The human
   filling `~/.ssh/config` is the authorization boundary; `authorize-connection`
   enforces it by refusing placeholders.
-- **OT/ICS is special.** If a connection is a controller, PLC, historian, or sits on
-  an OT/ICS subnet (e.g. Siemens S7/PLCSIM), default to read-only and require
-  explicit, documented human authorization — ideally a change ticket — before any
-  write, download, or setpoint change. Never do it autonomously. Details, standards,
-  and a checklist are in `references/ot-safety.md`.
 
 ## References
 
@@ -121,7 +115,5 @@ Read these when you need the detail; a normal run does not require them.
 - `references/ssh-config-and-agent.md` — full `~/.ssh/config` directives, the
   ssh-agent workflow on Windows and Linux/macOS, host-key policy, and the hardened
   ssh options the wrapper uses and why.
-- `references/ot-safety.md` — gating access to OT/ICS and PLC systems: when to
-  refuse, what authorization to require, and the relevant standards.
 - `references/why-credential-free.md` — the threat model and the incident pattern
   this skill is designed to prevent.
