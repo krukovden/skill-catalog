@@ -5,8 +5,8 @@ const path = require('path');
 
 /**
  * Copilot adapter: write a self-contained custom-instructions file at
- * .github/instructions/<name>.instructions.md. Unlike sdlc (which references a present
- * .sdlc/ tree), a standalone Copilot project has no source tree, so we inline the body.
+ * .github/instructions/<name>.instructions.md, inlining the skill body so the install
+ * needs no external source tree to reference.
  */
 
 const id = 'copilot';

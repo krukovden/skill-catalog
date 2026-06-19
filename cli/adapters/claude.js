@@ -5,7 +5,7 @@ const path = require('path');
 
 /**
  * Claude adapter: copy the full skill directory tree to .claude/skills/<name>/.
- * This matches both sdlc's output and the native Agent Skills layout.
+ * This is the native Agent Skills layout.
  */
 
 const id = 'claude';

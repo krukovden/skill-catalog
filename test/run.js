@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { loadSkill } = require('../cli/catalog');
+const { loadSkill, parseFrontmatter } = require('../cli/catalog');
 const claude = require('../cli/adapters/claude');
 const copilot = require('../cli/adapters/copilot');
 const codex = require('../cli/adapters/codex');
@@ -35,8 +35,22 @@ test('loadSkill parses frontmatter and body', () => {
   assert.ok(skill.description.length > 0);
   assert.ok(skill.body.startsWith('# Demo Skill'));
 });
-test('optional sdlc block is parsed as nested object', () => {
-  assert.deepStrictEqual(skill.frontmatter.sdlc, { agent: 'coder', phase: 'implement' });
+test('tolerates an extra nested frontmatter block without breaking', () => {
+  const md = [
+    '---',
+    'name: x',
+    'description: y',
+    'meta:',
+    '  a: 1',
+    '  b: two',
+    '---',
+    '',
+    '# Body',
+  ].join('\n');
+  const { frontmatter, body } = parseFrontmatter(md);
+  assert.strictEqual(frontmatter.name, 'x');
+  assert.deepStrictEqual(frontmatter.meta, { a: '1', b: 'two' });
+  assert.strictEqual(body, '# Body');
 });
 
 console.log('claude adapter');

@@ -9,8 +9,9 @@ const CATALOG_FILE = path.join(ROOT, 'catalog.json');
 
 /**
  * Minimal frontmatter parser. Supports top-level `key: value` string pairs and a single
- * nested block (e.g. `sdlc:` followed by indented `key: value` lines). This is NOT a full
- * YAML parser — it covers exactly what skill frontmatter needs (name, description, sdlc.*).
+ * nested block (a `key:` line followed by indented `key: value` lines). This is NOT a full
+ * YAML parser — it covers what skill frontmatter needs (name, description) and tolerates
+ * an extra nested block that a consumer may add to a skill without breaking parsing.
  *
  * @param {string} md raw SKILL.md contents
  * @returns {{ frontmatter: object, body: string }}
@@ -35,7 +36,7 @@ function parseFrontmatter(md) {
     if (indented && nestedKey) {
       frontmatter[nestedKey][key] = value;
     } else if (value === '') {
-      // Start of a nested block, e.g. `sdlc:`
+      // Start of a nested block (a bare `key:` with no inline value)
       nestedKey = key;
       frontmatter[key] = {};
     } else {

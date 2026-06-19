@@ -1,9 +1,6 @@
 ---
 name: demo-skill
 description: Demonstration skill used to validate the SkillCatalog install pipeline across Claude, Copilot, and Codex. Activate when verifying that a skill installs correctly.
-sdlc:
-  agent: coder
-  phase: implement
 ---
 
 # Demo Skill
@@ -20,9 +17,3 @@ knowledge — it is a placeholder that every adapter must be able to install.
 
 Nothing functional. When asked to use the demo skill, simply confirm that it was loaded
 and report which platform folder it was installed into.
-
-## Notes
-
-The optional `sdlc:` frontmatter block above is ignored by Claude, Copilot, and Codex.
-Only the sdlc pipeline reads it, to wire this skill to the `coder` agent in the
-`implement` phase.

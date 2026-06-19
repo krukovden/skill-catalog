@@ -3,9 +3,9 @@
 A platform-agnostic **catalog of skills** for Claude Code, GitHub Copilot, and OpenAI
 Codex. Pull only the skills you need to extend your assistant's base capabilities.
 
-The catalog is standalone and knows nothing about any particular host. If you also use
-[sdlc](https://github.com/krukovden/sdlc), it can consume this catalog to extend its
-skill base — the dependency is one-way (**sdlc → catalog**, never the reverse).
+The catalog is standalone and host-agnostic — it knows nothing about any particular
+consumer. Any external tool may import skills from it and add its own wiring at import
+time; the catalog itself stays neutral.
 
 ## Install skills
 
@@ -50,9 +50,6 @@ skills/<name>/
 ---
 name: <name>                 # must match the folder name
 description: <one line>       # used for discovery/triggering
-sdlc:                        # OPTIONAL — ignored by Claude/Copilot/Codex, read by sdlc
-  agent: coder
-  phase: implement
 ---
 
 # Body — the actual skill instructions
