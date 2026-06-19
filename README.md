@@ -1,13 +1,22 @@
 # SkillCatalog
 
-A platform-agnostic **catalog of skills** for Claude Code, GitHub Copilot, and OpenAI
-Codex. Pull only the skills you need to extend your assistant's base capabilities.
+A platform-agnostic **catalog of skills** for AI coding assistants — Claude Code,
+GitHub Copilot, and OpenAI Codex. Browse the catalog, pull only the skills you need,
+and they install into the right folder for your platform. Each skill extends the
+assistant's base capabilities with a focused, reusable piece of expertise.
 
-The catalog is standalone and host-agnostic — it knows nothing about any particular
-consumer. Any external tool may import skills from it and add its own wiring at import
-time; the catalog itself stays neutral.
+The catalog is standalone and host-agnostic: it knows nothing about any particular
+consumer. Any external tool can import skills from it and add its own wiring at
+import time; the catalog itself stays neutral.
 
-## Install skills
+## Skills
+
+| Skill | What it does |
+|-------|--------------|
+| **safety-ssh** | Connect to remote servers over SSH **without the assistant ever handling passwords, usernames, hostnames, or IP addresses.** Everything goes through a named SSH *connection* whose real details live in `~/.ssh/config` and whose key lives in `ssh-agent`. Includes deterministic scripts for the full flow (check → scaffold → authorize → run). |
+| **demo-skill** | A throwaway skill that validates the catalog's install pipeline across all three platforms. Not a real capability — used for testing the mechanics. |
+
+## Installing skills
 
 ### Claude (native marketplace)
 
@@ -15,11 +24,11 @@ time; the catalog itself stays neutral.
 /plugin marketplace add krukovden/SkillCatalog
 ```
 
-Then install the `skill-catalog` plugin. Skills are auto-discovered from `skills/`.
+Then install the `skill-catalog` plugin. Claude auto-discovers the skills.
 
 ### Any platform (interactive CLI)
 
-Run inside your project; pick a platform, then select skills:
+Run inside your project, pick a platform, then select skills:
 
 ```bash
 npx github:krukovden/SkillCatalog
@@ -31,51 +40,68 @@ npx github:krukovden/SkillCatalog
 | Copilot  | `.github/instructions/<name>.instructions.md` |
 | Codex    | `.codex/skills/<name>.md` + a managed block in `AGENTS.md` |
 
-Re-running is safe (idempotent). The Codex adapter only rewrites its own managed block in
-`AGENTS.md`, preserving the rest of the file.
+Re-running is safe (idempotent). The Codex adapter only rewrites its own managed
+block in `AGENTS.md`, preserving the rest of the file.
+
+## Project structure
+
+```text
+SkillCatalog/
+├── skills/                      # THE CONTENT — one folder per skill (source of truth)
+│   └── <name>/
+│       ├── SKILL.md             #   required: frontmatter (name, description) + instructions
+│       ├── scripts/             #   optional: deterministic helper scripts the skill runs
+│       ├── references/          #   optional: docs the assistant loads on demand
+│       └── evals/               #   optional: test prompts used to validate the skill
+│
+├── cli/                         # THE INSTALLER
+│   ├── index.js                 #   interactive prompt: choose platform + skills
+│   ├── catalog.js               #   load/validate catalog, parse skill frontmatter
+│   └── adapters/                #   per-platform install logic (pure functions)
+│       ├── claude.js            #     → .claude/skills/<name>/
+│       ├── copilot.js           #     → .github/instructions/<name>.instructions.md
+│       └── codex.js             #     → .codex/skills/<name>.md + AGENTS.md block
+│
+├── bin/skillcatalog.js          # npx entry point → cli/index.js
+├── scripts/build.js             # regenerates the generated files below from skills/
+├── test/run.js                  # unit tests for adapters + build sanity check
+│
+├── catalog.json                 # GENERATED — the runtime skill list the CLI reads
+├── .claude-plugin/
+│   ├── marketplace.json         # GENERATED — makes this repo a Claude marketplace
+│   └── plugin.json              # GENERATED — the plugin manifest Claude loads
+│
+├── package.json                 # zero runtime dependencies (Node built-ins only)
+└── README.md
+```
+
+**Generated files** (`catalog.json`, `.claude-plugin/*`) are committed because consumers
+read them directly — Claude reads `marketplace.json` when you add the catalog, and the
+CLI reads `catalog.json`. You never edit them by hand; run `npm run build` after changing
+skills and they regenerate from the `skills/` folder.
+
+`docs/` and `skills/*-workspace/` are local-only (git-ignored): design notes and
+transient eval results that are never published.
 
 ## Authoring a skill
 
 Add a folder under `skills/`:
 
-```text
-skills/<name>/
-  SKILL.md            # required
-  references/ assets/ # optional
-```
-
-`SKILL.md` frontmatter:
-
 ```yaml
+# skills/<name>/SKILL.md
 ---
 name: <name>                 # must match the folder name
-description: <one line>       # used for discovery/triggering
+description: <one line>      # how the assistant decides when to use the skill
 ---
 
 # Body — the actual skill instructions
 ```
 
-Then regenerate the derived manifests:
+Then regenerate and test:
 
 ```bash
 npm run build     # writes catalog.json, .claude-plugin/marketplace.json, plugin.json
-npm test          # adapter unit tests + build sanity e2e
+npm test          # adapter unit tests + build sanity check
 ```
 
-You only ever edit `SKILL.md` files; `catalog.json` and the Claude manifests are generated.
-
-## Layout
-
-```text
-catalog.json                     # generated runtime list (CLI reads this)
-.claude-plugin/marketplace.json  # generated Claude marketplace
-.claude-plugin/plugin.json       # generated plugin manifest
-skills/<name>/SKILL.md           # source of truth
-cli/                             # interactive installer + per-platform adapters
-scripts/build.js                 # regenerates the generated files
-test/run.js                      # tests
-docs/superpowers/specs/          # design spec
-```
-
-See [the design spec](docs/superpowers/specs/2026-06-19-skill-catalog-design.md) for the
-full rationale.
+You only ever edit files under `skills/`; everything else is generated or tooling.

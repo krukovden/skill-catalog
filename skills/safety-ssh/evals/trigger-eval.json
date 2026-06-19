@@ -1,0 +1,23 @@
+[
+  {"query": "i need to ssh into our staging box and restart the api, it's at 10.4.2.9, user is ubuntu", "should_trigger": true},
+  {"query": "can you connect to my server and check why the disk is full? run df -h and du -sh on /var", "should_trigger": true},
+  {"query": "deploy the latest build to prod over ssh — host is prod-web-01, pull main and run ./deploy.sh", "should_trigger": true},
+  {"query": "tail the last 200 lines of the app log on the remote machine, i think it's crashing on boot", "should_trigger": true},
+  {"query": "ssh deploy@192.168.1.50 with password Sup3rSecret! and bounce nginx for me", "should_trigger": true},
+  {"query": "i put the SSH password in my .env as SSH_PASS, use it to log into the db server and dump the schema", "should_trigger": true},
+  {"query": "connect to the jump host, hop to the internal app server, and grep today's errors in the logs", "should_trigger": true},
+  {"query": "run uptime and free -m on my linux server over ssh, ip is 172.16.0.8 login root", "should_trigger": true},
+  {"query": "set things up so you can run commands on my remote dev box without me pasting a password each time", "should_trigger": true},
+  {"query": "log into the build agent and prune old docker images, it keeps running out of space", "should_trigger": true},
+
+  {"query": "generate an ed25519 ssh key i can add to my GitHub account for signing commits", "should_trigger": false},
+  {"query": "my `ssh` command keeps hanging — what does the -v flag do and how do i read the debug output?", "should_trigger": false},
+  {"query": "write a Dockerfile that installs and runs openssh-server so my container accepts inbound connections", "should_trigger": false},
+  {"query": "document our SSH key rotation policy in the team wiki, about a page", "should_trigger": false},
+  {"query": "what's the actual difference between SSH and SSL/TLS? explain like i'm new", "should_trigger": false},
+  {"query": "configure my nginx server block to redirect all http traffic to https", "should_trigger": false},
+  {"query": "rsync my local ~/Photos folder to my external USB drive at /Volumes/backup", "should_trigger": false},
+  {"query": "explain how ssh-agent forwarding works and whether ForwardAgent yes is safe", "should_trigger": false},
+  {"query": "my git push fails with 'Permission denied (publickey)' to github.com — how do i fix the key?", "should_trigger": false},
+  {"query": "help me pick a strong passphrase scheme for my team's laptop full-disk encryption", "should_trigger": false}
+]
