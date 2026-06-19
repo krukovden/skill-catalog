@@ -6,6 +6,11 @@
       "name": "demo-skill",
       "description": "Demonstration skill used to validate the SkillCatalog install pipeline across Claude, Copilot, and Codex. Activate when verifying that a skill installs correctly.",
       "path": "skills/demo-skill"
+    },
+    {
+      "name": "safety-ssh",
+      "description": ">-",
+      "path": "skills/safety-ssh"
     }
   ]
 }
