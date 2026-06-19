@@ -8,10 +8,11 @@ const SKILLS_DIR = path.join(ROOT, 'skills');
 const CATALOG_FILE = path.join(ROOT, 'catalog.json');
 
 /**
- * Minimal frontmatter parser. Supports top-level `key: value` string pairs and a single
- * nested block (a `key:` line followed by indented `key: value` lines). This is NOT a full
- * YAML parser — it covers what skill frontmatter needs (name, description) and tolerates
- * an extra nested block that a consumer may add to a skill without breaking parsing.
+ * Minimal frontmatter parser. Supports top-level `key: value` string pairs, YAML block
+ * scalars (`>`, `>-`, `|`, `|-` followed by indented lines — common for long descriptions),
+ * and a single nested block (a `key:` line followed by indented `key: value` lines). This
+ * is NOT a full YAML parser — it covers what skill frontmatter needs (name, description)
+ * and tolerates an extra nested block a consumer may add without breaking parsing.
  *
  * @param {string} md raw SKILL.md contents
  * @returns {{ frontmatter: object, body: string }}
@@ -21,27 +22,47 @@ function parseFrontmatter(md) {
   if (!match) return { frontmatter: {}, body: md.trim() };
 
   const [, raw, body] = match;
+  const lines = raw.split(/\r?\n/);
   const frontmatter = {};
   let nestedKey = null;
 
-  for (const line of raw.split(/\r?\n/)) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (line.trim() === '' || line.trim().startsWith('#')) continue;
 
     const indented = /^\s+/.test(line);
     const kv = /^\s*([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
     if (!kv) continue;
     const [, key, valueRaw] = kv;
-    const value = stripQuotes(valueRaw.trim());
+    const value = valueRaw.trim();
+
+    // YAML block scalar: `key: >`, `>-`, `|`, `|-` — collect the following indented lines.
+    if (/^[|>][+-]?$/.test(value)) {
+      const folded = value[0] === '>';
+      const collected = [];
+      let j = i + 1;
+      while (j < lines.length && (lines[j].trim() === '' || /^\s/.test(lines[j]))) {
+        collected.push(lines[j].replace(/^\s+/, ''));
+        j++;
+      }
+      while (collected.length && collected[collected.length - 1] === '') collected.pop();
+      frontmatter[key] = folded
+        ? collected.join(' ').replace(/\s+/g, ' ').trim()
+        : collected.join('\n');
+      nestedKey = null;
+      i = j - 1;
+      continue;
+    }
 
     if (indented && nestedKey) {
-      frontmatter[nestedKey][key] = value;
+      frontmatter[nestedKey][key] = stripQuotes(value);
     } else if (value === '') {
       // Start of a nested block (a bare `key:` with no inline value)
       nestedKey = key;
       frontmatter[key] = {};
     } else {
       nestedKey = null;
-      frontmatter[key] = value;
+      frontmatter[key] = stripQuotes(value);
     }
   }
 
@@ -107,6 +128,9 @@ function scanSkills() {
 
   for (const entry of fs.readdirSync(SKILLS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
+    // A directory without a SKILL.md is simply not a skill (e.g. a workspace) — skip
+    // it silently. Only warn when a skill is present but malformed.
+    if (!fs.existsSync(path.join(SKILLS_DIR, entry.name, 'SKILL.md'))) continue;
     try {
       skills.push(loadSkill(entry.name));
     } catch (err) {

@@ -1,14 +1,19 @@
 ---
 name: safety-ssh
 description: >-
-  Use whenever the user wants to reach a remote machine over SSH — "ssh into the
-  server", "run this on the box", "check the remote logs", "deploy to prod",
-  "connect to the host" — or pastes a raw `ssh user@1.2.3.4` command or mentions
-  stored credentials, sshpass, or a password in .env. Establishes credential-free
-  SSH: the assistant works only through a named SSH **connection** and never sees
-  or types passwords, usernames, hostnames, IP addresses, or key files. Trigger
-  even when the user just gives an IP and says "connect" — moving that address out
-  of the chat and into a connection is exactly this skill's job.
+  Safe, credential-free SSH to remote servers — the assistant works only through a
+  named connection and never sees or types passwords, usernames, hostnames, or IPs.
+  Use this skill to actually carry out any task that lives on another machine — a
+  server, box, host, VM, instance, prod/staging environment, build or CI agent,
+  database server, or jump/bastion host. If fulfilling the request means logging in
+  over SSH and doing something there — restart or bounce a service, deploy, prune
+  docker images, dump a schema, free up disk, tail or grep remote logs, run
+  df/du/systemctl — this is the skill, and it is the required path for doing it.
+  Treat these as triggers: "ssh into…", "log into…", "connect to my server and…",
+  "hop to the internal host and…", a pasted `ssh user@host`, a bare IP, or an
+  offered SSH password/key/.env secret. Not for local-only SSH: making keys, git
+  publickey errors, explaining ssh flags or agent forwarding, passphrases, or local
+  rsync.
 ---
 
 # Safety SSH
