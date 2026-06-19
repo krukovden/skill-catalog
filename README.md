@@ -14,14 +14,13 @@ import time; the catalog itself stays neutral.
 | Skill | What it does |
 |-------|--------------|
 | **safety-ssh** | Connect to remote servers over SSH **without the assistant ever handling passwords, usernames, hostnames, or IP addresses.** Everything goes through a named SSH *connection* whose real details live in `~/.ssh/config` and whose key lives in `ssh-agent`. Includes deterministic scripts for the full flow (check → scaffold → authorize → run). |
-| **demo-skill** | A throwaway skill that validates the catalog's install pipeline across all three platforms. Not a real capability — used for testing the mechanics. |
 
 ## Installing skills
 
 ### Claude (native marketplace)
 
 ```text
-/plugin marketplace add krukovden/SkillCatalog
+/plugin marketplace add krukovden/skill-catalog
 ```
 
 Then install the `skill-catalog` plugin. Claude auto-discovers the skills.
@@ -31,7 +30,7 @@ Then install the `skill-catalog` plugin. Claude auto-discovers the skills.
 Run inside your project, pick a platform, then select skills:
 
 ```bash
-npx github:krukovden/SkillCatalog
+npx github:krukovden/skill-catalog
 ```
 
 | Platform | Installs to |

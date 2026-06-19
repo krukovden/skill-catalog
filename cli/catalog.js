@@ -91,21 +91,22 @@ function listFilesRecursive(dir, base = dir) {
 }
 
 /**
- * Load and validate a single skill from skills/<name>/.
+ * Load and validate a skill from an arbitrary directory containing a SKILL.md.
+ * The frontmatter `name` must match the directory's basename.
  * @returns {{ name, description, frontmatter, body, dir, files }} or throws on hard errors.
  */
-function loadSkill(name) {
-  const dir = path.join(SKILLS_DIR, name);
+function loadSkillFromDir(dir) {
+  const folder = path.basename(dir);
   const skillFile = path.join(dir, 'SKILL.md');
   if (!fs.existsSync(skillFile)) {
-    throw new Error(`skill "${name}" has no SKILL.md`);
+    throw new Error(`skill "${folder}" has no SKILL.md`);
   }
   const { frontmatter, body } = parseFrontmatter(fs.readFileSync(skillFile, 'utf8'));
   if (!frontmatter.name || !frontmatter.description) {
-    throw new Error(`skill "${name}" SKILL.md is missing required frontmatter (name/description)`);
+    throw new Error(`skill "${folder}" SKILL.md is missing required frontmatter (name/description)`);
   }
-  if (frontmatter.name !== name) {
-    throw new Error(`skill "${name}" frontmatter name is "${frontmatter.name}" — must match folder name`);
+  if (frontmatter.name !== folder) {
+    throw new Error(`skill "${folder}" frontmatter name is "${frontmatter.name}" — must match folder name`);
   }
   return {
     name: frontmatter.name,
@@ -115,6 +116,11 @@ function loadSkill(name) {
     dir,
     files: listFilesRecursive(dir),
   };
+}
+
+/** Load and validate a single skill from skills/<name>/. */
+function loadSkill(name) {
+  return loadSkillFromDir(path.join(SKILLS_DIR, name));
 }
 
 /**
@@ -156,6 +162,7 @@ module.exports = {
   parseFrontmatter,
   listFilesRecursive,
   loadSkill,
+  loadSkillFromDir,
   scanSkills,
   loadCatalog,
 };
