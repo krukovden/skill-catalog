@@ -1,0 +1,13 @@
+{
+  "name": "skillcatalog",
+  "owner": {
+    "name": "krukovden"
+  },
+  "plugins": [
+    {
+      "name": "skill-catalog",
+      "source": ".",
+      "description": "Extra skills extending Claude/Copilot/Codex base capabilities"
+    }
+  ]
+}

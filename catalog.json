@@ -1,0 +1,11 @@
+{
+  "name": "skillcatalog",
+  "description": "Extra skills extending Claude/Copilot/Codex base capabilities",
+  "skills": [
+    {
+      "name": "demo-skill",
+      "description": "Demonstration skill used to validate the SkillCatalog install pipeline across Claude, Copilot, and Codex. Activate when verifying that a skill installs correctly.",
+      "path": "skills/demo-skill"
+    }
+  ]
+}

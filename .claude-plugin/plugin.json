@@ -1,0 +1,5 @@
+{
+  "name": "skill-catalog",
+  "description": "Extra skills extending Claude/Copilot/Codex base capabilities",
+  "version": "0.1.0"
+}

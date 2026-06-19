@@ -1,0 +1,16 @@
+{
+  "name": "skillcatalog",
+  "version": "0.1.0",
+  "description": "A platform-agnostic catalog of skills for Claude, GitHub Copilot, and OpenAI Codex",
+  "bin": {
+    "skillcatalog": "bin/skillcatalog.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node test/run.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  }
+}
