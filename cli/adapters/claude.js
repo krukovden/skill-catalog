@@ -25,11 +25,18 @@ function outputs(skill) {
 
 function install(skill, projectDir) {
   const written = [];
-  for (const out of outputs(skill)) {
-    const dest = path.join(projectDir, out.path);
+  // Iterate the source files directly so we can preserve each file's mode — otherwise
+  // executable helper scripts (ado.sh, checks.sh, …) install as 0644 and the skill's
+  // `<dir>/scripts/foo.sh` invocations fail with "permission denied". Copying the exact
+  // source mode (fixed in git as 100755/100644) keeps installs byte- AND mode-deterministic.
+  for (const rel of skill.files) {
+    const srcPath = path.join(skill.dir, rel);
+    const relDest = path.join('.claude', 'skills', skill.name, rel);
+    const dest = path.join(projectDir, relDest);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, out.content);
-    written.push(out.path);
+    fs.writeFileSync(dest, fs.readFileSync(srcPath));
+    fs.chmodSync(dest, fs.statSync(srcPath).mode & 0o777);
+    written.push(relDest);
   }
   return written;
 }

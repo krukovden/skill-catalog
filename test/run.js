@@ -37,6 +37,11 @@ function makeFixtureSkill() {
     '---\nname: sample-skill\ndescription: A sample skill used by the test suite.\n---\n\n# Sample Skill\n\nBody.\n'
   );
   fs.writeFileSync(path.join(dir, 'references', 'notes.md'), 'notes\n');
+  // An executable helper script — used to verify installs preserve the +x mode.
+  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+  const sh = path.join(dir, 'scripts', 'run.sh');
+  fs.writeFileSync(sh, '#!/usr/bin/env bash\necho hi\n');
+  fs.chmodSync(sh, 0o755);
   return loadSkillFromDir(dir);
 }
 
@@ -82,6 +87,15 @@ test('install writes the file tree', () => {
   const written = claude.install(skill, dir);
   assert.ok(written.includes(path.join('.claude', 'skills', 'sample-skill', 'SKILL.md')));
   assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'sample-skill', 'references', 'notes.md')));
+});
+test('install preserves the executable bit on scripts (mode-deterministic)', () => {
+  if (process.platform === 'win32') return; // POSIX mode bits are a no-op on Windows
+  const dir = tmpProject();
+  claude.install(skill, dir);
+  const runSh = path.join(dir, '.claude', 'skills', 'sample-skill', 'scripts', 'run.sh');
+  assert.ok(fs.statSync(runSh).mode & 0o111, 'installed script must stay executable');
+  const notes = path.join(dir, '.claude', 'skills', 'sample-skill', 'references', 'notes.md');
+  assert.ok(!(fs.statSync(notes).mode & 0o111), 'non-executable files must stay non-executable');
 });
 
 console.log('copilot adapter');
