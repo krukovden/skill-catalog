@@ -18,13 +18,17 @@ import time; the catalog itself stays neutral.
 
 ## Installing skills
 
-### Claude (native marketplace)
+### Claude (native marketplace) — installs globally
 
 ```text
 /plugin marketplace add krukovden/skill-catalog
+/plugin install skill-catalog@skillcatalog
 ```
 
-Then install the `skill-catalog` plugin. Claude auto-discovers the skills.
+This is **user-scoped (global)**: Claude clones the repo into `~/.claude/plugins/` and
+auto-discovers **every** skill under `skills/`, making them available in all your
+projects at once. It's the whole bundle — for per-skill selection or local-only install
+(or Copilot/Codex), use the CLI below instead. Update later with `/plugin`.
 
 ### Any platform (interactive CLI)
 
