@@ -111,22 +111,22 @@ Read the PR description to understand **what** and **why** before looking at cod
 
 Keep this list — it is the **scope** of the review (Step 4b gate and the "don't comment on unchanged code" rule both key off it).
 
-### Step 3: Auto-detect skills from file paths
+### Step 3: Detect the stack and load matching review skills (if any are available)
 
-Before fetching content, scan the changed file paths and activate relevant skills:
+Scan the changed file paths to identify the stack, then **load whatever specialized review skills your environment happens to provide for it** — and if none exist, review with your own general expertise for that stack. This skill has **no hard dependency** on any other skill; specialized skills only sharpen the review when present.
 
-| File path pattern | Skill to load |
-|-------------------|---------------|
-| `frontend/**`, `*.component.ts`, `*.html`, `*.scss` | `frontend-angular` |
-| `backend/**`, `*.controller.ts`, `*.service.ts`, `*.repository.ts` | `backend-node` |
-| `**/*.cs`, `**/Azure.Functions/**` | `backend-csharp` |
-| `**/*.yml`, `**/pipelines/**`, `stages/`, `jobs/`, `steps/` | `pipeline-template` |
-| `**/*fortify*` | `fortify-sast` |
-| `.github/workflows/**` | `devops-github` |
+Common stack → skill mappings (use the ones that exist in your setup; skip the rest):
 
-Always load: `enhanced-reviewer` (review gate).
+| Files in the diff | Load if available |
+|-------------------|-------------------|
+| Angular / frontend (`*.component.ts`, `*.html`, `*.scss`, `frontend/**`) | an Angular/frontend review skill |
+| Node/TypeScript backend (`*.controller.ts`, `*.service.ts`, `*.repository.ts`, `backend/**`) | a Node/TypeScript backend skill |
+| C# / .NET (`*.cs`, Azure Functions) | a C#/.NET skill |
+| React / Next.js (`*.tsx`, `app/**`, `pages/**`) | a React skill |
+| CI/CD YAML (`*.yml` pipelines, `stages/`, `jobs/`, `steps/`, `.github/workflows/**`) | a pipelines / GitHub-Actions skill |
+| SAST / security configs | a security-review skill |
 
-Read the skill files from `.claude/skills/<name>/SKILL.md` — do NOT use the Skill tool (it won't find them).
+**How to load one:** if a general review skill (e.g. an `enhanced-reviewer`) or a stack skill is available via the Skill tool, invoke it; otherwise, if such skills live as files in the project (e.g. `.claude/skills/<name>/SKILL.md`), read the file directly. If neither exists, proceed — your built-in review knowledge is the baseline, and the objective gate in Step 4b backs it with facts regardless.
 
 ### Step 4: Fetch file content
 
@@ -138,7 +138,7 @@ Fetch each changed file with `ado.sh file` at the **source SHA**; for edited fil
 diff -u /tmp/old.ts /tmp/new.ts
 ```
 
-**Read beyond the diff to understand it — a diff cannot be judged in isolation.** When a change calls a function, dispatches a command, implements an interface, or relies on a type defined elsewhere, **fetch those unchanged files too** (via `ado.sh file` at the source SHA) and read them. You cannot tell whether `skip()` is correct without reading what `dispatch()` and `hasRoboticArmFaults()` actually do. This is separate from the commenting rule:
+**Read beyond the diff to understand it — a diff cannot be judged in isolation.** When a change calls a function, dispatches a command, implements an interface, or relies on a type defined elsewhere, **fetch those unchanged files too** (via `ado.sh file` at the source SHA) and read them. You cannot judge whether a changed method is correct without reading the helper it calls, the type it returns, or the guard it depends on. This is separate from the commenting rule:
 
 > **Read widely, comment narrowly.** Read whatever unchanged code you need for understanding; only *post comments* on lines the PR changed. A problem you spot in unchanged code → mention it to the user as context, or file a separate issue — never a PR comment on an unchanged line.
 
@@ -150,9 +150,16 @@ Before forming opinions, get **objective** ground truth. Run the gate on the cha
 <SKILL_DIR>/scripts/checks.sh <REPO_NAME> <SOURCE_SHA> --changed <path1> <path2> ...
 ```
 
+The gate needs a **local clone** of the repo to run. It finds one automatically when you run the review from inside that repo, or from a folder that holds it. If your clone lives elsewhere, point at it explicitly (a folder that contains the clone, or the clone itself):
+
+```bash
+<SKILL_DIR>/scripts/checks.sh <REPO_NAME> <SOURCE_SHA> --workspace <dir> --changed <path1> ...
+# or set once:  export ADO_REVIEW_WORKSPACE=<dir>
+```
+
 - `GATE: PASS` → typecheck + lint clean on the changed files; note it in Passed Checks.
 - `GATE: FAIL` → the printed compiler/eslint errors are **facts, not opinions**. Add each as a finding: type errors → `[B]`, lint/format → usually `[N]` (or `[S]` if it signals a real problem). Quote the tool's own message.
-- `GATE: SKIPPED` → no local clone of the repo under the workspace root (or no `node_modules`/`dotnet`). Say so in the review; fall back to reading the code. Do **not** claim the code compiles.
+- `GATE: SKIPPED` → no local clone found (or no `node_modules`/`dotnet` to run with). Say so in the review; fall back to reading the code. Do **not** claim the code compiles. If a clone does exist, re-run with `--workspace <dir>`.
 
 The gate runs in a throwaway worktree and never touches the user's checkout. Add `--full` to also run `npm run build` / `dotnet build` when a deeper check is warranted (larger PRs, build-config changes).
 
@@ -164,7 +171,7 @@ Review the overall design first — understand the forest before examining trees
 
 - List every claim: each bug/AC in the description, and anything the user told you the PR should do.
 - For each, find the code that delivers it and ask: *does it actually do this — always, or only sometimes?* Watch for **"always" vs conditional**, "all X" vs "some X", "before Y" vs "after Y".
-- A gap between what was promised and what the code does is a finding — often the single most valuable one. (On PR 16834 the win was exactly this: "**always** send reset" vs a reset that only fired `hasRoboticArmFaults()`.)
+- A gap between what was promised and what the code does is a finding — often the single most valuable one. (Classic example: the description says a reset is sent **always**, but the code only sends it under a condition — "always" ≠ "sometimes".)
 - If reconciling requires reading unchanged code (the dispatched command, the fault source, the type), read it (Step 4) before concluding.
 
 **5b. Evaluate each file across these lenses** (using the loaded skills):

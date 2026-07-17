@@ -14,7 +14,17 @@
 #   - degrades gracefully: if no local clone is found, prints ran=false and exits 0
 #
 # Usage:
-#   checks.sh <REPO_NAME> <SOURCE_SHA> [--full] [--changed <file> ...]
+#   checks.sh <REPO_NAME> <SOURCE_SHA> [--workspace <dir>] [--full] [--changed <file> ...]
+#
+# Locating the repo clone (build/lint needs a local checkout to reuse node_modules):
+#   1. --workspace <dir>       explicit; searched first (dir itself + its children)
+#   2. $ADO_REVIEW_WORKSPACE   same, via environment
+#   3. walk up from $PWD       so running the review from inside the repo just works
+#   4. children of $PWD        so running it from a folder that holds several clones works
+#   5. a 4-levels-up heuristic from this script (legacy workspace/<repo> layout)
+# The first git clone whose `origin` remote ends with /_git/<REPO_NAME> wins.
+# Not tied to any particular workspace layout; if none is found the gate degrades to
+# GATE: SKIPPED (exit 0) — never a hard failure.
 #
 # Output: a plain-text report on stdout, plus a final "GATE: PASS|FAIL|SKIPPED"
 # line the caller keys on. Non-zero exit ONLY on a real check failure.
@@ -23,10 +33,11 @@ set -uo pipefail
 
 REPO_NAME="${1:?REPO_NAME required}"; shift
 SOURCE_SHA="${1:?SOURCE_SHA required}"; shift
-FULL=0; CHANGED=()
+FULL=0; CHANGED=(); WORKSPACE="${ADO_REVIEW_WORKSPACE:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --full) FULL=1; shift;;
+    --workspace) shift; WORKSPACE="${1:-}"; shift || true;;
     --changed) shift; while [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; do CHANGED+=("$1"); shift; done;;
     *) shift;;
   esac
@@ -34,23 +45,49 @@ done
 
 log() { printf '%s\n' "$*"; }
 
-# Workspace root = the directory that contains this skill's .claude tree.
-# scripts/ -> azure-reviewer/ -> skills/ -> .claude/ -> <workspace root>
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WS_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-# --- locate the local clone by matching git remote to /_git/<REPO_NAME> ---
-CLONE=""
-for d in "$WS_ROOT"/*/; do
-  [ -d "$d/.git" ] || continue
+# Does <dir> hold a git clone whose origin remote is REPO_NAME? Print it and succeed if so.
+_is_match() {
+  local d="$1" url
+  { [ -d "$d/.git" ] || [ -f "$d/.git" ]; } || return 1
   url="$(git -C "$d" remote get-url origin 2>/dev/null || true)"
   case "$url" in
-    */_git/"$REPO_NAME"|*/_git/"$REPO_NAME".git) CLONE="${d%/}"; break;;
+    */_git/"$REPO_NAME"|*/_git/"$REPO_NAME".git) printf '%s' "$d"; return 0;;
   esac
-done
+  return 1
+}
+# Match <root> itself, then each immediate child.
+_search_root() {
+  local root="$1" d
+  [ -n "$root" ] && [ -d "$root" ] || return 1
+  _is_match "$root" && return 0
+  for d in "$root"/*/; do
+    [ -d "$d" ] || continue
+    _is_match "${d%/}" && return 0
+  done
+  return 1
+}
+# Walk up from <dir> to the filesystem root, matching at each level.
+_walk_up() {
+  local d="$1"
+  while [ -n "$d" ] && [ "$d" != "/" ]; do
+    _is_match "$d" && return 0
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+
+# --- locate the clone, in priority order ---
+CLONE=""
+[ -n "$CLONE" ] || CLONE="$(_search_root "$WORKSPACE" || true)"
+[ -n "$CLONE" ] || CLONE="$(_walk_up "$PWD" || true)"
+[ -n "$CLONE" ] || CLONE="$(_search_root "$PWD" || true)"
+[ -n "$CLONE" ] || CLONE="$(_search_root "$(cd "$SCRIPT_DIR/../../../.." 2>/dev/null && pwd)" || true)"
 
 if [ -z "$CLONE" ]; then
-  log "No local clone of '$REPO_NAME' found under $WS_ROOT — build/lint gate skipped."
+  log "No local clone of '$REPO_NAME' found (looked in --workspace/\$ADO_REVIEW_WORKSPACE, \$PWD and its parents, and near the script)."
+  log "Pass --workspace <dir> to point at the folder that holds the clone. Build/lint gate skipped."
   log "GATE: SKIPPED"
   exit 0
 fi
