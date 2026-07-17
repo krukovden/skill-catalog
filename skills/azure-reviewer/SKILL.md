@@ -36,7 +36,7 @@ Two committed scripts live next to this file under `scripts/`. They make the mec
   ```
   Maintain this TSV as you analyze — it is the machine-checkable mirror of your findings table.
 - **`checks.sh`** — objective **build/lint gate** (Step 4b). Checks out the PR commit in an isolated throwaway worktree, symlinks the local clone's `node_modules`, runs `tsc --noEmit` (scoped to changed files) + `eslint` on changed files, or `--full` for build/test; `.cs` repos get `dotnet build`. Prints a final `GATE: PASS|FAIL|SKIPPED`. Finds the clone via `--workspace`/`$ADO_REVIEW_WORKSPACE`/`$PWD`; degrades to `SKIPPED` (exit 0) if none. Never mutates the user's working tree.
-- **`list-skills.sh`** — discover the review skills installed on this machine (project-local `.claude/skills` + user-global `~/.claude/skills`) so Step 3 can reuse a stack-specific skill. TSV: `scope<TAB>name<TAB>path<TAB>description`.
+- **`list-skills.sh`** — discover the review skills installed on this machine — project-local (`.claude/skills`), user-global (`~/.claude/skills`), and active plugins (via `installed_plugins.json`) — so Step 3 can reuse a stack-specific skill. TSV: `scope<TAB>name<TAB>path<TAB>description` (scope = project|global|plugin).
 
 **Rule:** route every `az` call and every build/typecheck through these scripts. Only hand-write a one-off `az` command if a script genuinely lacks the capability — then consider adding it to `ado.sh`.
 
@@ -116,13 +116,13 @@ Keep this list — it is the **scope** of the review (Step 4b gate and the "don'
 
 The diff can span several stacks (C#, Node/TypeScript, Angular, React, pipelines…). Rather than assume named skills exist, **discover the review skills actually installed on this machine — project-local and user-global — and reuse the ones that match the diff's stack.** This skill has **no hard dependency** on any other skill; a specialized skill only sharpens the review when present, and its absence just means you review with your own expertise (still backed by the objective gate in Step 4b).
 
-**1. Discover** what's available (scans `<cwd>/.claude/skills` and `~/.claude/skills`):
+**1. Discover** what's available — scans project-local (`<cwd>/.claude/skills`), user-global (`~/.claude/skills`), and the active installed **plugins** (resolved from `~/.claude/plugins/installed_plugins.json`):
 
 ```bash
-<SKILL_DIR>/scripts/list-skills.sh          # TSV: scope <TAB> name <TAB> path <TAB> description
+<SKILL_DIR>/scripts/list-skills.sh          # TSV: scope <TAB> name <TAB> path <TAB> description   (scope = project|global|plugin)
 ```
 
-Also consider skills the session already exposes to you via the Skill tool (these include plugin and global skills the runtime has registered).
+Also consider skills the session already exposes to you via the Skill tool — same set, already registered by the runtime.
 
 **2. Match** the changed files to a skill by reading the `description` column / the skill's stated purpose. Typical stack → skill intent:
 

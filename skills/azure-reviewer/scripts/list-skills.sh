@@ -6,13 +6,17 @@
 # locations; matching a skill to the PR's stack is left to the caller (read the
 # description, decide). Portable: pure bash, no jq/python.
 #
-# Scanned locations (both, in this order):
+# Scanned locations (in this order):
 #   - project-local:  <cwd>/.claude/skills/*/SKILL.md      (override with $1)
 #   - user-global:    ~/.claude/skills/*/SKILL.md
+#   - plugins:        the ACTIVE installed plugins' skills, resolved from
+#                     ~/.claude/plugins/installed_plugins.json (each installPath +
+#                     /skills/*/SKILL.md). Using the registry avoids listing stale
+#                     cached versions or marketplace plugins that aren't installed.
 #
 # Output TSV, one skill per line:
 #   scope <TAB> name <TAB> path <TAB> description(first line, truncated)
-#   scope = project | global
+#   scope = project | global | plugin
 #
 # Exit 0 always (an empty list is a valid answer — just means "no local skills, use
 # built-in expertise").
@@ -55,8 +59,21 @@ emit_dir() { # <scope> <skills_dir>
   done
 }
 
+# Enumerate skills from every ACTIVE installed plugin (portable JSON read: no jq/python).
+emit_plugins() {
+  local reg="${HOME}/.claude/plugins/installed_plugins.json" ip
+  [ -f "$reg" ] || return 0
+  grep -o '"installPath"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" 2>/dev/null \
+    | sed 's/.*:[[:space:]]*"//; s/"$//' \
+    | while IFS= read -r ip; do
+        [ -n "$ip" ] || continue
+        emit_dir plugin "$ip/skills"
+      done
+}
+
 PROJECT_SKILLS="${1:-$PWD/.claude/skills}"
 GLOBAL_SKILLS="${HOME:-$HOME}/.claude/skills"
 
 emit_dir project "$PROJECT_SKILLS"
 emit_dir global  "$GLOBAL_SKILLS"
+emit_plugins
