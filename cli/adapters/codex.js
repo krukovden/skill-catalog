@@ -4,39 +4,40 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Codex adapter: Codex has no skills concept and reads AGENTS.md. We write each skill's
- * full body to .codex/skills/<name>.md and maintain an idempotent managed block in
- * AGENTS.md that references the installed skills. Unrelated AGENTS.md content is preserved.
+ * Codex adapter: Codex has no skills concept and reads AGENTS.md. We install each skill's
+ * FULL directory tree (SKILL.md + scripts/ + references/…) under .codex/skills/<name>/ and
+ * maintain an idempotent managed block in AGENTS.md that points at the skill's SKILL.md.
+ * Copying the whole tree (not just the body) means skills that ship helper scripts work
+ * under Codex too. Unrelated AGENTS.md content is preserved.
  */
 
 const id = 'codex';
 const label = 'OpenAI Codex (.codex/skills/ + AGENTS.md)';
-// Local: skills at <cwd>/.codex/skills/, managed block in <cwd>/AGENTS.md.
-// Global: skills at ~/.codex/skills/, managed block in ~/.codex/AGENTS.md.
+// Local: skills at <cwd>/.codex/skills/<name>/, managed block in <cwd>/AGENTS.md.
+// Global: skills at ~/.codex/skills/<name>/, managed block in ~/.codex/AGENTS.md.
 // Only the AGENTS.md location and the in-block skill ref differ (see install()).
 const supportsGlobal = true;
 
 const START = '<!-- skillcatalog:start -->';
 const END = '<!-- skillcatalog:end -->';
 
-function skillFilePath(skill) {
-  return path.join('.codex', 'skills', `${skill.name}.md`);
-}
-
-/** Pure: per-skill file output (the AGENTS.md merge is handled in install). */
+/** Pure: every file this adapter writes for a skill (the full tree), relative to base dir. */
 function outputs(skill) {
-  return [{ path: skillFilePath(skill), content: `${skill.body}\n` }];
+  return skill.files.map((rel) => ({
+    path: path.join('.codex', 'skills', skill.name, rel),
+    content: fs.readFileSync(path.join(skill.dir, rel)),
+  }));
 }
 
 /**
  * Pure: render the managed AGENTS.md block. `refPrefix` is the path the block uses to
- * point at each skill file, relative to the AGENTS.md that hosts it (`.codex/skills` when
- * AGENTS.md sits at a project root, `skills` when it sits inside ~/.codex/).
+ * point at each skill's SKILL.md, relative to the AGENTS.md that hosts it (`.codex/skills`
+ * when AGENTS.md sits at a project root, `skills` when it sits inside ~/.codex/).
  */
 function renderBlock(entries, refPrefix = '.codex/skills') {
   const lines = [START, '## SkillCatalog skills', ''];
   for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    lines.push(`- **${e.name}** — see \`${refPrefix}/${e.name}.md\`: ${e.description}`);
+    lines.push(`- **${e.name}** — see \`${refPrefix}/${e.name}/SKILL.md\`: ${e.description}`);
   }
   lines.push('', END);
   return lines.join('\n');
@@ -71,11 +72,15 @@ function mergeAgentsMd(existing, skill, refPrefix = '.codex/skills') {
 function install(skill, baseDir, scope = 'local') {
   const written = [];
 
-  for (const out of outputs(skill)) {
-    const dest = path.join(baseDir, out.path);
+  // Copy the full skill tree, preserving each file's mode (executable scripts stay +x).
+  for (const rel of skill.files) {
+    const srcPath = path.join(skill.dir, rel);
+    const relDest = path.join('.codex', 'skills', skill.name, rel);
+    const dest = path.join(baseDir, relDest);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, out.content);
-    written.push(out.path);
+    fs.writeFileSync(dest, fs.readFileSync(srcPath));
+    fs.chmodSync(dest, fs.statSync(srcPath).mode & 0o777);
+    written.push(relDest);
   }
 
   // Global install co-locates AGENTS.md inside ~/.codex next to the skills;

@@ -113,13 +113,24 @@ test('install writes the instructions file', () => {
 });
 
 console.log('codex adapter');
-test('install writes skill file and AGENTS.md managed block', () => {
+test('install writes the full skill tree (incl. scripts) and AGENTS.md managed block', () => {
   const dir = tmpProject();
   codex.install(skill, dir);
-  assert.ok(fs.existsSync(path.join(dir, '.codex', 'skills', 'sample-skill.md')));
+  assert.ok(fs.existsSync(path.join(dir, '.codex', 'skills', 'sample-skill', 'SKILL.md')));
+  // the whole tree comes along — not just the body
+  assert.ok(fs.existsSync(path.join(dir, '.codex', 'skills', 'sample-skill', 'scripts', 'run.sh')));
+  assert.ok(fs.existsSync(path.join(dir, '.codex', 'skills', 'sample-skill', 'references', 'notes.md')));
   const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
   assert.ok(agents.includes(codex.START) && agents.includes(codex.END));
   assert.ok(agents.includes('**sample-skill**'));
+  assert.ok(agents.includes('`.codex/skills/sample-skill/SKILL.md`'));
+});
+test('codex install preserves the executable bit on scripts', () => {
+  if (process.platform === 'win32') return;
+  const dir = tmpProject();
+  codex.install(skill, dir);
+  const runSh = path.join(dir, '.codex', 'skills', 'sample-skill', 'scripts', 'run.sh');
+  assert.ok(fs.statSync(runSh).mode & 0o111, 'installed codex script must stay executable');
 });
 test('merge preserves unrelated AGENTS.md content and is idempotent', () => {
   const original = '# My project rules\n\nDo nice things.\n';
@@ -148,10 +159,10 @@ test('codex global puts AGENTS.md in .codex/ with a relative skills/ ref', () =>
   codex.install(skill, home, 'global');
   const agentsPath = path.join(home, '.codex', 'AGENTS.md');
   assert.ok(fs.existsSync(agentsPath), 'AGENTS.md should live in .codex/ for global');
-  assert.ok(fs.existsSync(path.join(home, '.codex', 'skills', 'sample-skill.md')));
+  assert.ok(fs.existsSync(path.join(home, '.codex', 'skills', 'sample-skill', 'SKILL.md')));
   const agents = fs.readFileSync(agentsPath, 'utf8');
-  assert.ok(agents.includes('`skills/sample-skill.md`'), 'ref should be relative to .codex/');
-  assert.ok(!agents.includes('`.codex/skills/sample-skill.md`'), 'must not use the project-root ref');
+  assert.ok(agents.includes('`skills/sample-skill/SKILL.md`'), 'ref should be relative to .codex/');
+  assert.ok(!agents.includes('`.codex/skills/sample-skill/SKILL.md`'), 'must not use the project-root ref');
   // Idempotent + still parseable with the relaxed ref regex.
   const again = codex.mergeAgentsMd(agents, skill, 'skills');
   const count = (again.match(/\*\*sample-skill\*\*/g) || []).length;

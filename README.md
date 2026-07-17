@@ -41,7 +41,7 @@ npx github:krukovden/skill-catalog
 | Platform | Local (this project) | Global (all projects) |
 |----------|----------------------|-----------------------|
 | Claude   | `.claude/skills/<name>/` | `~/.claude/skills/<name>/` |
-| Codex    | `.codex/skills/<name>.md` + managed block in `AGENTS.md` | `~/.codex/skills/<name>.md` + managed block in `~/.codex/AGENTS.md` |
+| Codex    | `.codex/skills/<name>/` (full tree) + managed block in `AGENTS.md` | `~/.codex/skills/<name>/` (full tree) + managed block in `~/.codex/AGENTS.md` |
 | Copilot  | `.github/instructions/<name>.instructions.md` | — (repo-scoped only) |
 
 The CLI asks *where* to install (local project vs global user home) for the platforms
@@ -66,7 +66,7 @@ SkillCatalog/
 │   └── adapters/                #   per-platform install logic (pure functions)
 │       ├── claude.js            #     → .claude/skills/<name>/
 │       ├── copilot.js           #     → .github/instructions/<name>.instructions.md
-│       └── codex.js             #     → .codex/skills/<name>.md + AGENTS.md block
+│       └── codex.js             #     → .codex/skills/<name>/ (full tree) + AGENTS.md block
 │
 ├── bin/skillcatalog.js          # npx entry point → cli/index.js
 ├── scripts/build.js             # regenerates the generated files below from skills/
