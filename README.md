@@ -28,20 +28,22 @@ Then install the `skill-catalog` plugin. Claude auto-discovers the skills.
 
 ### Any platform (interactive CLI)
 
-Run inside your project, pick a platform, then select skills:
+Run inside your project, pick a platform, choose **local vs global**, then select skills:
 
 ```bash
 npx github:krukovden/skill-catalog
 ```
 
-| Platform | Installs to |
-|----------|-------------|
-| Claude   | `.claude/skills/<name>/` (full skill folder) |
-| Copilot  | `.github/instructions/<name>.instructions.md` |
-| Codex    | `.codex/skills/<name>.md` + a managed block in `AGENTS.md` |
+| Platform | Local (this project) | Global (all projects) |
+|----------|----------------------|-----------------------|
+| Claude   | `.claude/skills/<name>/` | `~/.claude/skills/<name>/` |
+| Codex    | `.codex/skills/<name>.md` + managed block in `AGENTS.md` | `~/.codex/skills/<name>.md` + managed block in `~/.codex/AGENTS.md` |
+| Copilot  | `.github/instructions/<name>.instructions.md` | — (repo-scoped only) |
 
-Re-running is safe (idempotent). The Codex adapter only rewrites its own managed
-block in `AGENTS.md`, preserving the rest of the file.
+The CLI asks *where* to install (local project vs global user home) for the platforms
+that support both; Copilot is repo-scoped, so it always installs locally. Re-running is
+safe (idempotent) — the Codex adapter only rewrites its own managed block in `AGENTS.md`,
+preserving the rest of the file.
 
 ## Project structure
 

@@ -11,6 +11,9 @@ const path = require('path');
 
 const id = 'copilot';
 const label = 'GitHub Copilot (.github/instructions/)';
+// Copilot custom instructions live in the repo (.github/instructions/) and are inherently
+// repo-scoped — there is no user-global location, so only local install is offered.
+const supportsGlobal = false;
 
 function render(skill) {
   return [
@@ -45,4 +48,4 @@ function install(skill, projectDir) {
   return written;
 }
 
-module.exports = { id, label, outputs, render, install };
+module.exports = { id, label, supportsGlobal, outputs, render, install };

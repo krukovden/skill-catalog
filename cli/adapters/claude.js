@@ -10,6 +10,10 @@ const path = require('path');
 
 const id = 'claude';
 const label = 'Claude Code (.claude/skills/)';
+// Claude reads skills from <cwd>/.claude/skills (project) and ~/.claude/skills (global).
+// Both are the same `.claude/skills/<name>/` layout — only the base dir differs, so a
+// plain base swap in index.js is enough; the adapter needs no scope branching.
+const supportsGlobal = true;
 
 /** Pure: returns the files this adapter would write, relative to the project dir. */
 function outputs(skill) {
@@ -30,4 +34,4 @@ function install(skill, projectDir) {
   return written;
 }
 
-module.exports = { id, label, outputs, install };
+module.exports = { id, label, supportsGlobal, outputs, install };

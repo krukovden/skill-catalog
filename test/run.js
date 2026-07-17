@@ -117,6 +117,33 @@ test('merge preserves unrelated AGENTS.md content and is idempotent', () => {
   assert.strictEqual(count, 1);
 });
 
+console.log('install scope (local vs global)');
+test('adapters declare supportsGlobal correctly', () => {
+  assert.strictEqual(claude.supportsGlobal, true);
+  assert.strictEqual(codex.supportsGlobal, true);
+  assert.strictEqual(copilot.supportsGlobal, false);
+});
+test('claude global install uses the same layout under the base dir', () => {
+  const home = tmpProject(); // stands in for ~ under a global install
+  const written = claude.install(skill, home, 'global');
+  assert.ok(written.includes(path.join('.claude', 'skills', 'sample-skill', 'SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'sample-skill', 'SKILL.md')));
+});
+test('codex global puts AGENTS.md in .codex/ with a relative skills/ ref', () => {
+  const home = tmpProject();
+  codex.install(skill, home, 'global');
+  const agentsPath = path.join(home, '.codex', 'AGENTS.md');
+  assert.ok(fs.existsSync(agentsPath), 'AGENTS.md should live in .codex/ for global');
+  assert.ok(fs.existsSync(path.join(home, '.codex', 'skills', 'sample-skill.md')));
+  const agents = fs.readFileSync(agentsPath, 'utf8');
+  assert.ok(agents.includes('`skills/sample-skill.md`'), 'ref should be relative to .codex/');
+  assert.ok(!agents.includes('`.codex/skills/sample-skill.md`'), 'must not use the project-root ref');
+  // Idempotent + still parseable with the relaxed ref regex.
+  const again = codex.mergeAgentsMd(agents, skill, 'skills');
+  const count = (again.match(/\*\*sample-skill\*\*/g) || []).length;
+  assert.strictEqual(count, 1);
+});
+
 console.log('cli selection');
 test('parseSelection handles "all" and index lists', () => {
   assert.deepStrictEqual(parseSelection('all', 3), [0, 1, 2]);

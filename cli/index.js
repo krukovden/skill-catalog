@@ -1,5 +1,6 @@
 'use strict';
 
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
@@ -87,13 +88,32 @@ async function run(argv = []) {
       return;
     }
 
-    // 3. Confirm + install
+    // 3. Choose scope (local project vs global user-home) — only where it applies.
+    let scope = 'local';
+    let baseDir = projectDir;
+    if (adapter.supportsGlobal) {
+      console.log('\nInstall where?');
+      console.log(`  1. This project (${projectDir})`);
+      console.log(`  2. Global — all projects (${os.homedir()})`);
+      const scopeAns = await prompter.ask('> ');
+      if (scopeAns === '2') {
+        scope = 'global';
+        baseDir = os.homedir();
+      } else if (scopeAns !== '1' && scopeAns !== '') {
+        console.log('Unknown choice. Aborting.');
+        return;
+      }
+    } else {
+      console.log(`\n${adapter.label} is project-scoped — installing locally.`);
+    }
+
+    // 4. Confirm + install
     const chosen = indices.map((i) => skills[i]);
-    console.log(`\nInstalling ${chosen.length} skill(s) for ${adapter.label} into ${projectDir}:`);
+    console.log(`\nInstalling ${chosen.length} skill(s) for ${adapter.label} (${scope}) into ${baseDir}:`);
     const { loadSkill } = require('./catalog');
     for (const entry of chosen) {
       const skill = loadSkill(entry.name);
-      const written = adapter.install(skill, projectDir);
+      const written = adapter.install(skill, baseDir, scope);
       console.log(`  ✓ ${skill.name}`);
       written.forEach((w) => console.log(`      ${w}`));
     }

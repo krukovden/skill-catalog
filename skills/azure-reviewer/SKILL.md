@@ -35,7 +35,8 @@ Two committed scripts live next to this file under `scripts/`. They make the mec
   id <TAB> tag <TAB> file <TAB> line <TAB> quotedLine
   ```
   Maintain this TSV as you analyze — it is the machine-checkable mirror of your findings table.
-- **`checks.sh`** — objective **build/lint gate** (Step 4b). Checks out the PR commit in an isolated throwaway worktree, symlinks the local clone's `node_modules`, runs `tsc --noEmit` (scoped to changed files) + `eslint` on changed files, or `--full` for build/test; `.cs` repos get `dotnet build`. Prints a final `GATE: PASS|FAIL|SKIPPED`. Degrades to `SKIPPED` (exit 0) if no local clone of the repo exists under the workspace root. Never mutates the user's working tree.
+- **`checks.sh`** — objective **build/lint gate** (Step 4b). Checks out the PR commit in an isolated throwaway worktree, symlinks the local clone's `node_modules`, runs `tsc --noEmit` (scoped to changed files) + `eslint` on changed files, or `--full` for build/test; `.cs` repos get `dotnet build`. Prints a final `GATE: PASS|FAIL|SKIPPED`. Finds the clone via `--workspace`/`$ADO_REVIEW_WORKSPACE`/`$PWD`; degrades to `SKIPPED` (exit 0) if none. Never mutates the user's working tree.
+- **`list-skills.sh`** — discover the review skills installed on this machine (project-local `.claude/skills` + user-global `~/.claude/skills`) so Step 3 can reuse a stack-specific skill. TSV: `scope<TAB>name<TAB>path<TAB>description`.
 
 **Rule:** route every `az` call and every build/typecheck through these scripts. Only hand-write a one-off `az` command if a script genuinely lacks the capability — then consider adding it to `ado.sh`.
 
@@ -111,22 +112,31 @@ Read the PR description to understand **what** and **why** before looking at cod
 
 Keep this list — it is the **scope** of the review (Step 4b gate and the "don't comment on unchanged code" rule both key off it).
 
-### Step 3: Detect the stack and load matching review skills (if any are available)
+### Step 3: Detect the stack and reuse matching review skills (discover what's on the machine)
 
-Scan the changed file paths to identify the stack, then **load whatever specialized review skills your environment happens to provide for it** — and if none exist, review with your own general expertise for that stack. This skill has **no hard dependency** on any other skill; specialized skills only sharpen the review when present.
+The diff can span several stacks (C#, Node/TypeScript, Angular, React, pipelines…). Rather than assume named skills exist, **discover the review skills actually installed on this machine — project-local and user-global — and reuse the ones that match the diff's stack.** This skill has **no hard dependency** on any other skill; a specialized skill only sharpens the review when present, and its absence just means you review with your own expertise (still backed by the objective gate in Step 4b).
 
-Common stack → skill mappings (use the ones that exist in your setup; skip the rest):
+**1. Discover** what's available (scans `<cwd>/.claude/skills` and `~/.claude/skills`):
 
-| Files in the diff | Load if available |
-|-------------------|-------------------|
-| Angular / frontend (`*.component.ts`, `*.html`, `*.scss`, `frontend/**`) | an Angular/frontend review skill |
-| Node/TypeScript backend (`*.controller.ts`, `*.service.ts`, `*.repository.ts`, `backend/**`) | a Node/TypeScript backend skill |
-| C# / .NET (`*.cs`, Azure Functions) | a C#/.NET skill |
-| React / Next.js (`*.tsx`, `app/**`, `pages/**`) | a React skill |
-| CI/CD YAML (`*.yml` pipelines, `stages/`, `jobs/`, `steps/`, `.github/workflows/**`) | a pipelines / GitHub-Actions skill |
-| SAST / security configs | a security-review skill |
+```bash
+<SKILL_DIR>/scripts/list-skills.sh          # TSV: scope <TAB> name <TAB> path <TAB> description
+```
 
-**How to load one:** if a general review skill (e.g. an `enhanced-reviewer`) or a stack skill is available via the Skill tool, invoke it; otherwise, if such skills live as files in the project (e.g. `.claude/skills/<name>/SKILL.md`), read the file directly. If neither exists, proceed — your built-in review knowledge is the baseline, and the objective gate in Step 4b backs it with facts regardless.
+Also consider skills the session already exposes to you via the Skill tool (these include plugin and global skills the runtime has registered).
+
+**2. Match** the changed files to a skill by reading the `description` column / the skill's stated purpose. Typical stack → skill intent:
+
+| Files in the diff | Reuse a skill whose purpose is… |
+|-------------------|--------------------------------|
+| Angular (`*.component.ts`, `*.html`, `*.scss`) | Angular / frontend review |
+| Node/TypeScript backend (`*.controller.ts`, `*.service.ts`, `*.repository.ts`) | Node/TypeScript backend review |
+| C# / .NET (`*.cs`, Azure Functions) | C# / .NET review |
+| React / Next.js (`*.tsx`, `app/**`, `pages/**`) | React review |
+| CI/CD YAML (`*.yml`, `stages/`, `jobs/`, `steps/`, `.github/workflows/**`) | pipelines / GitHub-Actions review |
+| SAST / security configs | security review |
+| any diff | a general code-review gate (e.g. an `enhanced-reviewer`), if one is installed |
+
+**3. Load** each matched skill: invoke it via the Skill tool if the runtime registered it; otherwise read its `SKILL.md` from the `path` that `list-skills.sh` printed. Apply its checks in Step 5. If nothing matches, proceed — built-in review knowledge is the baseline.
 
 ### Step 4: Fetch file content
 
