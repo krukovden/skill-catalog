@@ -13,6 +13,7 @@ import time; the catalog itself stays neutral.
 
 | Skill | What it does |
 |-------|--------------|
+| **azure-reviewer** | Review Azure DevOps pull requests end-to-end via the `az` CLI — preflight (login/extension/org-project), fetch the diff, reconcile the PR's stated intent against the code, run an objective build/lint gate on the PR branch, classify findings by severity + confidence, and post approved comments back. Ships deterministic scripts (`ado.sh`, `checks.sh`) so the mechanical parts run identically every time, with machine-checked comment anchors and post-verification. |
 | **safety-ssh** | Connect to remote servers over SSH **without the assistant ever handling passwords, usernames, hostnames, or IP addresses.** Everything goes through a named SSH *connection* whose real details live in `~/.ssh/config` and whose key lives in `ssh-agent`. Includes deterministic scripts for the full flow (check → scaffold → authorize → run). |
 
 ## Installing skills
