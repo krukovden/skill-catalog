@@ -33,6 +33,24 @@ The bucket list lives in `cli/catalog.js` (`PROMOTED_BUCKETS` / `UNPROMOTED_BUCK
 nowhere else. To add a topical bucket: add it to `PROMOTED_BUCKETS`, create the folder with
 a `README.md`, rebuild.
 
+## Invocation decides who can reach a skill
+
+`invocation: model` (the default) or `invocation: user`, one decision for **every**
+platform — a skill is user-invoked everywhere or nowhere. Each adapter translates it:
+Claude gets `disable-model-invocation: true` injected into the installed `SKILL.md`, Codex
+gets an `agents/openai.yaml` policy and is left out of the `AGENTS.md` model index, and
+Copilot skips the skill entirely because its instruction files are always-on with no way
+to invoke them.
+
+Choose `user` when the agent should never fire the skill on its own. It costs nothing in
+context; a `model` skill's `description` is loaded every turn. The audience of the
+`description` changes with it — a user-invoked skill's description is a human-facing
+one-liner with the trigger list stripped, because the model never reads it.
+
+`platforms:` carries per-platform overrides; the only value is `skip`. Both blocks are
+**one level deep** — the frontmatter parser supports exactly one level and now throws on a
+second rather than silently flattening it.
+
 ## Invariants
 
 Hold all of these, or the build and tests will disagree with you:

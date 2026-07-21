@@ -31,6 +31,24 @@ const supportsGlobal = false;
 const INSTRUCTIONS_DIR = path.join('.github', 'instructions');
 const ASSET_ROOT = path.join('.github', 'skillcatalog');
 
+/**
+ * Pure: why this skill cannot be installed for Copilot, or null when it can.
+ *
+ * Copilot has no invocation concept at all — instruction files are applied by glob, always.
+ * So a user-invoked skill would be the worst of both worlds here: permanently loaded and
+ * impossible to invoke deliberately. Skipping is the honest outcome, and saying so beats
+ * installing something that cannot behave as authored.
+ */
+function skipReason(skill) {
+  if (skill.platforms && skill.platforms.copilot === 'skip') {
+    return 'the skill opts out of Copilot (platforms.copilot: skip)';
+  }
+  if (skill.invocation === 'user') {
+    return 'it is user-invoked, and Copilot instructions are always-on with no way to invoke them';
+  }
+  return null;
+}
+
 /** Pure: posix path of the skill's asset directory, as referenced from inside the body. */
 function assetDir(skill) {
   return path.posix.join('.github', 'skillcatalog', skill.name);
@@ -62,6 +80,7 @@ function render(skill) {
 
 /** Pure: returns the files this adapter would write, relative to the project dir. */
 function outputs(skill) {
+  if (skipReason(skill)) return [];
   const out = [
     {
       path: path.join(INSTRUCTIONS_DIR, `${skill.name}.instructions.md`),
@@ -81,6 +100,7 @@ function outputs(skill) {
 
 function install(skill, projectDir) {
   const written = [];
+  if (skipReason(skill)) return written;
 
   const instructionsRel = path.join(INSTRUCTIONS_DIR, `${skill.name}.instructions.md`);
   const instructionsDest = path.join(projectDir, instructionsRel);
@@ -112,6 +132,7 @@ module.exports = {
   install,
   assetDir,
   hasAssets,
+  skipReason,
   ASSET_ROOT,
   INSTRUCTIONS_DIR,
 };

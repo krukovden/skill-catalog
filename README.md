@@ -133,10 +133,20 @@ Add a folder under the bucket it belongs to:
 ---
 name: <name>                 # must match the folder name
 description: <one line>      # how the assistant decides when to use the skill
+invocation: model            # optional: model (default) | user
+platforms:                   # optional: per-platform overrides, one level deep
+  copilot: skip
 ---
 
 # Body — the actual skill instructions
 ```
+
+**`invocation`** is one decision for every platform. `model` (the default) means the agent
+can fire the skill itself, so its `description` is loaded into context every turn and is
+written for the model. `user` means only you, typing its name, can reach it — zero context
+load, and the `description` becomes a human-facing one-liner. Each adapter translates it:
+Claude gets `disable-model-invocation: true`, Codex an `agents/openai.yaml` policy, and
+Copilot skips the skill (its instruction files are always-on, with no way to invoke them).
 
 Then regenerate and test:
 

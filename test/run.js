@@ -11,6 +11,7 @@ const {
   scanSkills,
   PROMOTED_BUCKETS,
   UNPROMOTED_BUCKETS,
+  PLATFORMS,
 } = require('../cli/catalog');
 const claude = require('../cli/adapters/claude');
 const copilot = require('../cli/adapters/copilot');
@@ -37,7 +38,7 @@ function tmpProject() {
 // The default body exercises both link styles a real skill uses: a markdown link into
 // references/ and the `<SKILL_DIR>` placeholder into scripts/.
 // `bare: true` ships SKILL.md and nothing else; `body` overrides the body text.
-function makeFixtureSkill({ bare = false, body = null } = {}) {
+function makeFixtureSkill({ bare = false, body = null, frontmatter = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-fixture-'));
   const dir = path.join(root, 'sample-skill');
   fs.mkdirSync(dir, { recursive: true });
@@ -47,10 +48,9 @@ function makeFixtureSkill({ bare = false, body = null } = {}) {
     (bare
       ? '# Sample Skill\n\nBody.'
       : '# Sample Skill\n\nSee [notes](references/notes.md), then run `<SKILL_DIR>/scripts/run.sh`.');
-  fs.writeFileSync(
-    path.join(dir, 'SKILL.md'),
-    `---\nname: sample-skill\ndescription: A sample skill used by the test suite.\n---\n\n${text}\n`
-  );
+  const meta = ['name: sample-skill', 'description: A sample skill used by the test suite.'];
+  if (frontmatter) meta.push(frontmatter);
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\n${meta.join('\n')}\n---\n\n${text}\n`);
 
   if (!bare) {
     fs.mkdirSync(path.join(dir, 'references'), { recursive: true });
@@ -256,6 +256,88 @@ test('summarize keeps the first sentence and caps the length', () => {
   const out = summarize(long);
   assert.ok(out.length <= 100, `expected <=100 chars, got ${out.length}`);
   assert.ok(out.endsWith('…'));
+});
+
+console.log('invocation + platforms');
+const userSkill = makeFixtureSkill({ frontmatter: 'invocation: user' });
+
+test('invocation defaults to model when frontmatter is silent', () => {
+  assert.strictEqual(skill.invocation, 'model');
+  assert.deepStrictEqual(skill.platforms, {});
+});
+test('an unknown invocation value is rejected, not ignored', () => {
+  assert.throws(() => makeFixtureSkill({ frontmatter: 'invocation: sometimes' }), /invocation "sometimes"/);
+});
+test('an unknown platform id is rejected', () => {
+  assert.throws(() => makeFixtureSkill({ frontmatter: 'platforms:\n  jetbrains: skip' }), /unknown platform/);
+});
+test('an unsupported platform value is rejected', () => {
+  assert.throws(() => makeFixtureSkill({ frontmatter: 'platforms:\n  copilot: maybe' }), /only supported value/);
+});
+test('two-level frontmatter nesting fails loudly instead of flattening', () => {
+  // The trap this schema was designed around: the parser holds one level, and used to
+  // silently fold a second one into it — producing a corrupt skill that still built.
+  assert.throws(
+    () => parseFrontmatter(['---', 'name: x', 'description: y', 'platforms:', '  codex:', '    allow_implicit_invocation: false', '---', '', 'B'].join('\n')),
+    /nests too deep/
+  );
+});
+test('PLATFORMS matches the adapter ids exactly (no drift)', () => {
+  assert.deepStrictEqual([...PLATFORMS].sort(), [claude.id, codex.id, copilot.id].sort());
+});
+
+test('claude injects disable-model-invocation for a user-invoked skill', () => {
+  const out = claude.outputs(userSkill).find((o) => o.path.endsWith('SKILL.md'));
+  assert.ok(out.content.toString().includes('disable-model-invocation: true'));
+});
+test('claude leaves a model-invoked SKILL.md byte-identical', () => {
+  const out = claude.outputs(skill).find((o) => o.path.endsWith('SKILL.md'));
+  const src = fs.readFileSync(path.join(skill.dir, 'SKILL.md'));
+  assert.ok(out.content.equals(src), 'model-invoked skills must be copied verbatim');
+});
+test('claude injection is idempotent and keeps the body intact', () => {
+  const once = claude.withDisableModelInvocation(fs.readFileSync(path.join(userSkill.dir, 'SKILL.md'), 'utf8'));
+  const twice = claude.withDisableModelInvocation(once);
+  assert.strictEqual(once, twice);
+  assert.strictEqual((twice.match(/disable-model-invocation/g) || []).length, 1);
+  assert.ok(twice.includes('# Sample Skill'));
+});
+test('claude injection only touches SKILL.md, not the rest of the tree', () => {
+  const notes = claude.outputs(userSkill).find((o) => o.path.endsWith('notes.md'));
+  assert.ok(notes.content.equals(fs.readFileSync(path.join(userSkill.dir, 'references', 'notes.md'))));
+});
+
+test('codex writes an openai.yaml policy only for user-invoked skills', () => {
+  const policy = codex.outputs(userSkill).find((o) => o.path.endsWith(codex.POLICY_FILE));
+  assert.ok(policy, 'user-invoked skill must get agents/openai.yaml');
+  assert.ok(policy.content.includes('allow_implicit_invocation: false'));
+  assert.strictEqual(codex.outputs(skill).find((o) => o.path.endsWith(codex.POLICY_FILE)), undefined);
+});
+test('codex keeps user-invoked skills out of the AGENTS.md model index', () => {
+  const merged = codex.mergeAgentsMd('', userSkill);
+  assert.ok(!merged.includes('**sample-skill**'), 'the block is the model index; a user-invoked skill has no place in it');
+});
+test('codex removes a skill from AGENTS.md when it becomes user-invoked', () => {
+  const listed = codex.mergeAgentsMd('# rules\n', skill);
+  assert.ok(listed.includes('**sample-skill**'));
+  const delisted = codex.mergeAgentsMd(listed, userSkill);
+  assert.ok(!delisted.includes('**sample-skill**'), 'a stale entry must not survive the switch');
+  assert.ok(delisted.includes('# rules'), 'unrelated content still survives');
+});
+
+test('copilot skips a user-invoked skill and says why', () => {
+  assert.match(copilot.skipReason(userSkill), /user-invoked/);
+  assert.deepStrictEqual(copilot.outputs(userSkill), []);
+  assert.deepStrictEqual(copilot.install(userSkill, tmpProject()), []);
+});
+test('copilot honours an explicit platforms.copilot: skip', () => {
+  const optedOut = makeFixtureSkill({ frontmatter: 'platforms:\n  copilot: skip' });
+  assert.match(copilot.skipReason(optedOut), /opts out/);
+  assert.deepStrictEqual(copilot.outputs(optedOut), []);
+});
+test('copilot still installs an ordinary model-invoked skill', () => {
+  assert.strictEqual(copilot.skipReason(skill), null);
+  assert.ok(copilot.outputs(skill).length > 1);
 });
 
 console.log('buckets');

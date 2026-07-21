@@ -21,12 +21,29 @@ const supportsGlobal = true;
 const START = '<!-- skillcatalog:start -->';
 const END = '<!-- skillcatalog:end -->';
 
+const POLICY_FILE = path.join('agents', 'openai.yaml');
+
+/**
+ * Pure: the sidecar Codex reads for invocation policy, or null when the skill is
+ * model-invoked (the default needs no file). Codex expresses "only the human may fire
+ * this" here, where Claude expresses it in SKILL.md frontmatter.
+ */
+function policyYaml(skill) {
+  if (skill.invocation !== 'user') return null;
+  return ['policy:', '  allow_implicit_invocation: false', ''].join('\n');
+}
+
 /** Pure: every file this adapter writes for a skill (the full tree), relative to base dir. */
 function outputs(skill) {
-  return skill.files.map((rel) => ({
+  const out = skill.files.map((rel) => ({
     path: path.join('.codex', 'skills', skill.name, rel),
     content: fs.readFileSync(path.join(skill.dir, rel)),
   }));
+  const policy = policyYaml(skill);
+  if (policy) {
+    out.push({ path: path.join('.codex', 'skills', skill.name, POLICY_FILE), content: policy });
+  }
+  return out;
 }
 
 /**
@@ -56,10 +73,19 @@ function parseExistingEntries(agentsMd) {
   return entries;
 }
 
-/** Pure: merge a skill into AGENTS.md content, returning the new content. */
+/**
+ * Pure: merge a skill into AGENTS.md content, returning the new content.
+ *
+ * The managed block is the model's index of what it may reach for, so a user-invoked skill
+ * is removed from it rather than listed — including when a skill that used to be
+ * model-invoked becomes user-invoked, which is why the entry is filtered out before the
+ * invocation is checked.
+ */
 function mergeAgentsMd(existing, skill, refPrefix = '.codex/skills') {
   const entries = parseExistingEntries(existing).filter((e) => e.name !== skill.name);
-  entries.push({ name: skill.name, description: skill.description });
+  if (skill.invocation !== 'user') {
+    entries.push({ name: skill.name, description: skill.description });
+  }
   const block = renderBlock(entries, refPrefix);
 
   if (new RegExp(`${START}[\\s\\S]*?${END}`).test(existing)) {
@@ -80,6 +106,15 @@ function install(skill, baseDir, scope = 'local') {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, fs.readFileSync(srcPath));
     fs.chmodSync(dest, fs.statSync(srcPath).mode & 0o777);
+    written.push(relDest);
+  }
+
+  const policy = policyYaml(skill);
+  if (policy) {
+    const relDest = path.join('.codex', 'skills', skill.name, POLICY_FILE);
+    const dest = path.join(baseDir, relDest);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, policy);
     written.push(relDest);
   }
 
@@ -105,6 +140,8 @@ module.exports = {
   renderBlock,
   parseExistingEntries,
   mergeAgentsMd,
+  policyYaml,
   START,
   END,
+  POLICY_FILE,
 };

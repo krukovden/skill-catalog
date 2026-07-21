@@ -101,7 +101,8 @@ async function run(argv = []) {
     for (const [bucket, entries] of groups) {
       console.log(`\n  ${bucket}/`);
       for (const { skill, index } of entries) {
-        console.log(`    ${index + 1}. ${skill.name} — ${summarize(skill.description)}`);
+        const mark = skill.invocation === 'user' ? ' [type it]' : '';
+        console.log(`    ${index + 1}. ${skill.name}${mark} — ${summarize(skill.description)}`);
       }
     }
     const selAns = await prompter.ask('\nSelect (e.g. 1,3 or "all"): ');
@@ -132,6 +133,7 @@ async function run(argv = []) {
 
     // 4. Confirm + install
     const chosen = indices.map((i) => skills[i]);
+    const skipped = [];
     console.log(`\nInstalling ${chosen.length} skill(s) for ${adapter.label} (${scope}) into ${baseDir}:`);
     const { ROOT, loadSkill, loadSkillFromDir } = require('./catalog');
     for (const entry of chosen) {
@@ -140,9 +142,23 @@ async function run(argv = []) {
       const skill = entry.path
         ? loadSkillFromDir(path.join(ROOT, entry.path), entry.bucket || null)
         : loadSkill(entry.name);
+
+      // A platform that cannot express what the skill needs says so out loud — a silent
+      // no-op would read as a successful install.
+      const reason = adapter.skipReason ? adapter.skipReason(skill) : null;
+      if (reason) {
+        skipped.push(skill.name);
+        console.log(`  – ${skill.name} — skipped: ${reason}`);
+        continue;
+      }
+
       const written = adapter.install(skill, baseDir, scope);
       console.log(`  ✓ ${skill.name}`);
       written.forEach((w) => console.log(`      ${w}`));
+    }
+    if (skipped.length) {
+      console.log(`\nDone — ${chosen.length - skipped.length} installed, ${skipped.length} skipped (${skipped.join(', ')}).`);
+      return;
     }
     console.log('\nDone.');
   } finally {

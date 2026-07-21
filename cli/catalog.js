@@ -22,6 +22,26 @@ const UNPROMOTED_BUCKETS = ['in-progress', 'deprecated'];
 const BUCKETS = [...PROMOTED_BUCKETS, ...UNPROMOTED_BUCKETS];
 
 /**
+ * Who can reach a skill. One decision for every platform, deliberately not per-platform:
+ * a skill is user-invoked everywhere or nowhere, and each adapter expresses that in its
+ * own dialect.
+ *
+ * - `model` (default) — the agent can fire it autonomously, so its `description` is
+ *   loaded into context every turn and is written for the model (rich trigger phrasing).
+ * - `user` — only the human, typing its name, can reach it. Zero context load, and the
+ *   `description` becomes a human-facing one-liner with the trigger list stripped.
+ */
+const INVOCATIONS = ['model', 'user'];
+
+/**
+ * Platform ids a skill may carry an override for, matching each adapter's `id`. The only
+ * supported value is `skip` — "this platform cannot express what the skill needs, so do
+ * not install it here".
+ */
+const PLATFORMS = ['claude', 'codex', 'copilot'];
+const PLATFORM_VALUES = ['skip'];
+
+/**
  * Minimal frontmatter parser. Supports top-level `key: value` string pairs, YAML block
  * scalars (`>`, `>-`, `|`, `|-` followed by indented lines — common for long descriptions),
  * and a single nested block (a `key:` line followed by indented `key: value` lines). This
@@ -69,6 +89,15 @@ function parseFrontmatter(md) {
     }
 
     if (indented && nestedKey) {
+      // A bare `key:` while already one level deep would be a second level. This parser
+      // holds exactly one, and used to flatten the deeper keys into the level above it
+      // without complaint — a corrupted skill that still built and still passed tests.
+      // Fail loudly instead; the caller skips the skill and prints why.
+      if (value === '') {
+        throw new Error(
+          `frontmatter key "${nestedKey}.${key}" nests too deep — this parser supports one level of nesting, so keep values flat (e.g. "${key}: skip")`
+        );
+      }
       frontmatter[nestedKey][key] = stripQuotes(value);
     } else if (value === '') {
       // Start of a nested block (a bare `key:` with no inline value)
@@ -125,6 +154,31 @@ function loadSkillFromDir(dir, bucket = null) {
   if (frontmatter.name !== folder) {
     throw new Error(`skill "${folder}" frontmatter name is "${frontmatter.name}" — must match folder name`);
   }
+
+  const invocation = frontmatter.invocation || 'model';
+  if (!INVOCATIONS.includes(invocation)) {
+    throw new Error(
+      `skill "${folder}" has invocation "${invocation}" — must be one of: ${INVOCATIONS.join(', ')}`
+    );
+  }
+
+  const platforms = frontmatter.platforms || {};
+  if (typeof platforms !== 'object' || Array.isArray(platforms)) {
+    throw new Error(`skill "${folder}" frontmatter "platforms" must be a block of key: value pairs`);
+  }
+  for (const [id, value] of Object.entries(platforms)) {
+    if (!PLATFORMS.includes(id)) {
+      throw new Error(
+        `skill "${folder}" has an override for unknown platform "${id}" — known: ${PLATFORMS.join(', ')}`
+      );
+    }
+    if (!PLATFORM_VALUES.includes(value)) {
+      throw new Error(
+        `skill "${folder}" sets platforms.${id} to "${value}" — the only supported value is: ${PLATFORM_VALUES.join(', ')}`
+      );
+    }
+  }
+
   return {
     name: frontmatter.name,
     description: frontmatter.description,
@@ -133,6 +187,8 @@ function loadSkillFromDir(dir, bucket = null) {
     dir,
     files: listFilesRecursive(dir),
     bucket,
+    invocation,
+    platforms,
     path: bucket ? path.posix.join('skills', bucket, folder) : null,
   };
 }
@@ -211,6 +267,9 @@ module.exports = {
   PROMOTED_BUCKETS,
   UNPROMOTED_BUCKETS,
   BUCKETS,
+  INVOCATIONS,
+  PLATFORMS,
+  PLATFORM_VALUES,
   parseFrontmatter,
   listFilesRecursive,
   loadSkill,

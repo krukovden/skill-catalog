@@ -23,6 +23,15 @@ function build() {
   const { skills, warnings } = scanSkills({ buckets: PROMOTED_BUCKETS });
   warnings.forEach((w) => console.warn(`⚠ ${w}`));
 
+  // A skipped skill is a malformed skill — bad frontmatter, a name that doesn't match its
+  // folder, an unknown invocation. Building on regardless would quietly ship a catalog
+  // that is missing a skill the author believes they just added.
+  const skippedSkills = warnings.filter((w) => w.startsWith('skipped '));
+  if (skippedSkills.length) {
+    console.error(`✗ ${skippedSkills.length} skill(s) were skipped — fix them and rebuild`);
+    process.exit(1);
+  }
+
   if (skills.length === 0) {
     console.error('✗ no promoted skills found — refusing to write an empty catalog');
     process.exit(1);
@@ -37,6 +46,8 @@ function build() {
       name: s.name,
       description: s.description,
       bucket: s.bucket,
+      invocation: s.invocation,
+      platforms: s.platforms,
       path: s.path,
     })),
   };
