@@ -8,6 +8,20 @@ const SKILLS_DIR = path.join(ROOT, 'skills');
 const CATALOG_FILE = path.join(ROOT, 'catalog.json');
 
 /**
+ * Skills live in bucket folders: skills/<bucket>/<name>/. The bucket a skill sits in is
+ * the ONLY thing that decides whether it ships — there is no separate status field to
+ * keep in sync. Promoted buckets are published (catalog.json, the Claude plugin, the
+ * README); everything else stays in the repo so work-in-progress and retired skills can
+ * be committed without ever reaching a user.
+ *
+ * Adding a topical bucket = add it to PROMOTED_BUCKETS and create the folder. Nothing
+ * else in the codebase enumerates buckets.
+ */
+const PROMOTED_BUCKETS = ['engineering', 'ops', 'productivity'];
+const UNPROMOTED_BUCKETS = ['in-progress', 'deprecated'];
+const BUCKETS = [...PROMOTED_BUCKETS, ...UNPROMOTED_BUCKETS];
+
+/**
  * Minimal frontmatter parser. Supports top-level `key: value` string pairs, YAML block
  * scalars (`>`, `>-`, `|`, `|-` followed by indented lines — common for long descriptions),
  * and a single nested block (a `key:` line followed by indented `key: value` lines). This
@@ -93,9 +107,12 @@ function listFilesRecursive(dir, base = dir) {
 /**
  * Load and validate a skill from an arbitrary directory containing a SKILL.md.
  * The frontmatter `name` must match the directory's basename.
- * @returns {{ name, description, frontmatter, body, dir, files }} or throws on hard errors.
+ * `bucket` is the folder under skills/ the skill was found in (null for a standalone dir,
+ * e.g. a test fixture); when set it also yields `path`, the repo-relative posix path that
+ * catalog.json and the plugin manifest publish.
+ * @returns {{ name, description, frontmatter, body, dir, files, bucket, path }} or throws.
  */
-function loadSkillFromDir(dir) {
+function loadSkillFromDir(dir, bucket = null) {
   const folder = path.basename(dir);
   const skillFile = path.join(dir, 'SKILL.md');
   if (!fs.existsSync(skillFile)) {
@@ -115,35 +132,67 @@ function loadSkillFromDir(dir) {
     body,
     dir,
     files: listFilesRecursive(dir),
+    bucket,
+    path: bucket ? path.posix.join('skills', bucket, folder) : null,
   };
 }
 
-/** Load and validate a single skill from skills/<name>/. */
+/** Load and validate a single skill by name, searching every bucket. */
 function loadSkill(name) {
-  return loadSkillFromDir(path.join(SKILLS_DIR, name));
+  for (const bucket of BUCKETS) {
+    const dir = path.join(SKILLS_DIR, bucket, name);
+    if (fs.existsSync(path.join(dir, 'SKILL.md'))) return loadSkillFromDir(dir, bucket);
+  }
+  throw new Error(`skill "${name}" not found in any bucket (${BUCKETS.join(', ')})`);
 }
 
 /**
- * Scan skills/ and return valid skills. Invalid skills are skipped with a warning
- * (collected in the returned `warnings` array) rather than aborting the whole catalog.
+ * Scan skills/<bucket>/<name>/ and return valid skills. Invalid skills are skipped with a
+ * warning (collected in the returned `warnings` array) rather than aborting the whole
+ * catalog. By default only PROMOTED buckets are returned — that default is what keeps
+ * in-progress and deprecated work out of everything we publish.
+ *
+ * @param {{ buckets?: string[] }} [opts] buckets to scan; defaults to the promoted ones.
  */
-function scanSkills() {
+function scanSkills({ buckets = PROMOTED_BUCKETS } = {}) {
   const skills = [];
   const warnings = [];
   if (!fs.existsSync(SKILLS_DIR)) return { skills, warnings };
 
+  // Guard the migration to buckets: a skill dropped straight into skills/ would silently
+  // vanish from the catalog, so name it loudly instead of ignoring it.
   for (const entry of fs.readdirSync(SKILLS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    // A directory without a SKILL.md is simply not a skill (e.g. a workspace) — skip
-    // it silently. Only warn when a skill is present but malformed.
-    if (!fs.existsSync(path.join(SKILLS_DIR, entry.name, 'SKILL.md'))) continue;
-    try {
-      skills.push(loadSkill(entry.name));
-    } catch (err) {
-      warnings.push(`skipped ${entry.name}: ${err.message}`);
+    if (fs.existsSync(path.join(SKILLS_DIR, entry.name, 'SKILL.md'))) {
+      warnings.push(
+        `skills/${entry.name}/ sits outside a bucket — move it into one of: ${BUCKETS.join(', ')}`
+      );
+    } else if (!BUCKETS.includes(entry.name) && !entry.name.endsWith('-workspace')) {
+      warnings.push(`skills/${entry.name}/ is not a known bucket — ignored`);
     }
   }
-  skills.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Ordered by bucket first (in the caller's bucket order), then by name within each.
+  // The CLI numbers this list flat while displaying it grouped, so a name-only sort would
+  // scatter each bucket's indices (productivity showing "3" and "5").
+  for (const bucket of buckets) {
+    const bucketDir = path.join(SKILLS_DIR, bucket);
+    if (!fs.existsSync(bucketDir)) continue;
+    const inBucket = [];
+    for (const entry of fs.readdirSync(bucketDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      // A directory without a SKILL.md is simply not a skill (e.g. a workspace) — skip
+      // it silently. Only warn when a skill is present but malformed.
+      if (!fs.existsSync(path.join(bucketDir, entry.name, 'SKILL.md'))) continue;
+      try {
+        inBucket.push(loadSkillFromDir(path.join(bucketDir, entry.name), bucket));
+      } catch (err) {
+        warnings.push(`skipped ${bucket}/${entry.name}: ${err.message}`);
+      }
+    }
+    inBucket.sort((a, b) => a.name.localeCompare(b.name));
+    skills.push(...inBucket);
+  }
   return { skills, warnings };
 }
 
@@ -159,6 +208,9 @@ module.exports = {
   ROOT,
   SKILLS_DIR,
   CATALOG_FILE,
+  PROMOTED_BUCKETS,
+  UNPROMOTED_BUCKETS,
+  BUCKETS,
   parseFrontmatter,
   listFilesRecursive,
   loadSkill,

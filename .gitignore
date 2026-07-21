@@ -2,8 +2,8 @@ node_modules/
 *.log
 .DS_Store
 
-# eval run artifacts (transient)
-skills/*-workspace/
+# eval run artifacts (transient) — live next to their skill inside its bucket
+skills/*/*-workspace/
 
 # local-only design docs — never published
 docs/

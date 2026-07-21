@@ -5,11 +5,17 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { loadSkillFromDir, parseFrontmatter } = require('../cli/catalog');
+const {
+  loadSkillFromDir,
+  parseFrontmatter,
+  scanSkills,
+  PROMOTED_BUCKETS,
+  UNPROMOTED_BUCKETS,
+} = require('../cli/catalog');
 const claude = require('../cli/adapters/claude');
 const copilot = require('../cli/adapters/copilot');
 const codex = require('../cli/adapters/codex');
-const { parseSelection } = require('../cli/index');
+const { parseSelection, summarize } = require('../cli/index');
 
 let passed = 0;
 function test(name, fn) {
@@ -175,13 +181,84 @@ test('parseSelection handles "all" and index lists', () => {
   assert.deepStrictEqual(parseSelection('1,3', 3), [0, 2]);
   assert.deepStrictEqual(parseSelection('9', 3), []);
 });
+test('summarize keeps the first sentence and caps the length', () => {
+  assert.strictEqual(summarize('Short one. Trigger list follows.'), 'Short one.');
+  const long = `${'a'.repeat(200)}. Rest.`;
+  const out = summarize(long);
+  assert.ok(out.length <= 100, `expected <=100 chars, got ${out.length}`);
+  assert.ok(out.endsWith('…'));
+});
+
+console.log('buckets');
+test('scanSkills returns only promoted buckets by default', () => {
+  const { skills } = scanSkills();
+  assert.ok(skills.length > 0, 'expected at least one promoted skill');
+  for (const s of skills) {
+    assert.ok(
+      PROMOTED_BUCKETS.includes(s.bucket),
+      `${s.name} is in "${s.bucket}", which is not a promoted bucket`
+    );
+  }
+});
+test('every scanned skill carries its bucket and repo-relative path', () => {
+  const { skills } = scanSkills();
+  for (const s of skills) {
+    assert.strictEqual(s.path, `skills/${s.bucket}/${s.name}`);
+  }
+});
+test('unpromoted buckets are reachable only when asked for explicitly', () => {
+  const promoted = scanSkills().skills.map((s) => s.name);
+  const unpromoted = scanSkills({ buckets: UNPROMOTED_BUCKETS }).skills.map((s) => s.name);
+  const leaked = unpromoted.filter((n) => promoted.includes(n));
+  assert.deepStrictEqual(leaked, [], 'an unpromoted skill leaked into the default scan');
+});
+test('no skill sits outside a bucket', () => {
+  const { warnings } = scanSkills();
+  const stray = warnings.filter((w) => w.includes('outside a bucket'));
+  assert.deepStrictEqual(stray, [], stray.join('; '));
+});
 
 console.log('e2e: build output');
+const readJson = (...p) => JSON.parse(fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8'));
+
 test('marketplace.json is valid after build', () => {
   const mp = path.join(__dirname, '..', '.claude-plugin', 'marketplace.json');
   assert.ok(fs.existsSync(mp), 'run `npm run build` first');
   const json = JSON.parse(fs.readFileSync(mp, 'utf8'));
   assert.ok(json.name && Array.isArray(json.plugins) && json.plugins.length > 0);
+});
+test('plugin.json version tracks package.json (else installs never update)', () => {
+  const pkg = readJson('package.json');
+  const plugin = readJson('.claude-plugin', 'plugin.json');
+  assert.strictEqual(plugin.version, pkg.version);
+  assert.strictEqual(readJson('catalog.json').version, pkg.version);
+});
+test('plugin.json lists promoted skill paths explicitly, not by auto-discovery', () => {
+  const plugin = readJson('.claude-plugin', 'plugin.json');
+  const expected = scanSkills().skills.map((s) => `./${s.path}`);
+  assert.ok(Array.isArray(plugin.skills), 'plugin.json must carry an explicit skills array');
+  assert.deepStrictEqual(plugin.skills.slice().sort(), expected.slice().sort());
+});
+test('no unpromoted skill reaches catalog.json or plugin.json', () => {
+  const shipped = new Set([
+    ...readJson('catalog.json').skills.map((s) => s.name),
+    ...readJson('.claude-plugin', 'plugin.json').skills.map((p) => path.basename(p)),
+  ]);
+  for (const s of scanSkills({ buckets: UNPROMOTED_BUCKETS }).skills) {
+    assert.ok(!shipped.has(s.name), `${s.bucket}/${s.name} must not ship`);
+  }
+});
+test('catalog.json matches what a fresh scan produces (build is up to date)', () => {
+  const onDisk = readJson('catalog.json').skills.map((s) => `${s.bucket}/${s.name}`).sort();
+  const scanned = scanSkills().skills.map((s) => `${s.bucket}/${s.name}`).sort();
+  assert.deepStrictEqual(onDisk, scanned, 'run `npm run build`');
+});
+test('every bucket has a README.md', () => {
+  for (const bucket of [...PROMOTED_BUCKETS, ...UNPROMOTED_BUCKETS]) {
+    const dir = path.join(__dirname, '..', 'skills', bucket);
+    if (!fs.existsSync(dir)) continue;
+    assert.ok(fs.existsSync(path.join(dir, 'README.md')), `skills/${bucket}/README.md missing`);
+  }
 });
 
 console.log(`\n${passed} passed`);

@@ -43,6 +43,17 @@ function createPrompter() {
   return { ask, close: () => rl.close() };
 }
 
+/**
+ * Pure: one-line summary of a skill description for the picker. Descriptions are written
+ * for the model and carry long trigger lists, which makes the menu unreadable — keep the
+ * leading sentence and cap the length.
+ */
+function summarize(description, max = 100) {
+  const firstSentence = String(description).split(/(?<=\.)\s+/)[0].trim();
+  if (firstSentence.length <= max) return firstSentence;
+  return `${firstSentence.slice(0, max - 1).trimEnd()}…`;
+}
+
 /** Parse a selection string like "1,3" or "all" against a list length. Returns indices. */
 function parseSelection(input, length) {
   const trimmed = input.trim().toLowerCase();
@@ -78,9 +89,21 @@ async function run(argv = []) {
       return;
     }
 
-    // 2. Select skills
+    // 2. Select skills, grouped by bucket. Numbering stays flat and global so the
+    //    selection syntax ("1,3") is unaffected by how the list is grouped.
     console.log('\nAvailable skills:');
-    skills.forEach((s, i) => console.log(`  ${i + 1}. ${s.name} — ${s.description}`));
+    const groups = new Map();
+    skills.forEach((s, i) => {
+      const bucket = s.bucket || 'skills';
+      if (!groups.has(bucket)) groups.set(bucket, []);
+      groups.get(bucket).push({ skill: s, index: i });
+    });
+    for (const [bucket, entries] of groups) {
+      console.log(`\n  ${bucket}/`);
+      for (const { skill, index } of entries) {
+        console.log(`    ${index + 1}. ${skill.name} — ${summarize(skill.description)}`);
+      }
+    }
     const selAns = await prompter.ask('\nSelect (e.g. 1,3 or "all"): ');
     const indices = parseSelection(selAns, skills.length);
     if (indices.length === 0) {
@@ -110,9 +133,13 @@ async function run(argv = []) {
     // 4. Confirm + install
     const chosen = indices.map((i) => skills[i]);
     console.log(`\nInstalling ${chosen.length} skill(s) for ${adapter.label} (${scope}) into ${baseDir}:`);
-    const { loadSkill } = require('./catalog');
+    const { ROOT, loadSkill, loadSkillFromDir } = require('./catalog');
     for (const entry of chosen) {
-      const skill = loadSkill(entry.name);
+      // Prefer the bucket path recorded at build time; fall back to a by-name search so a
+      // catalog.json generated before buckets still installs.
+      const skill = entry.path
+        ? loadSkillFromDir(path.join(ROOT, entry.path), entry.bucket || null)
+        : loadSkill(entry.name);
       const written = adapter.install(skill, baseDir, scope);
       console.log(`  ✓ ${skill.name}`);
       written.forEach((w) => console.log(`      ${w}`));
@@ -123,4 +150,4 @@ async function run(argv = []) {
   }
 }
 
-module.exports = { run, parseSelection, ADAPTERS };
+module.exports = { run, parseSelection, summarize, ADAPTERS };

@@ -1,6 +1,6 @@
 {
   "name": "skillcatalog",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "A platform-agnostic catalog of skills for Claude, GitHub Copilot, and OpenAI Codex",
   "bin": {
     "skillcatalog": "bin/skillcatalog.js"

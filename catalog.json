@@ -1,16 +1,37 @@
 {
   "name": "skillcatalog",
   "description": "Extra skills extending Claude/Copilot/Codex base capabilities",
+  "version": "0.3.0",
   "skills": [
     {
       "name": "azure-reviewer",
       "description": "Review Azure DevOps pull requests via az CLI — fetch PR diff, analyze code, present issues, and post approved comments back to the PR. Use when the user asks to review an Azure DevOps PR, mentions a PR ID/URL, or wants to post review comments to Azure DevOps.",
-      "path": "skills/azure-reviewer"
+      "bucket": "engineering",
+      "path": "skills/engineering/azure-reviewer"
+    },
+    {
+      "name": "diagnosing-bugs",
+      "description": "Diagnosis loop for hard bugs and performance regressions — refuses to theorise until a tight feedback loop already goes red on this bug. Use when the user says \"diagnose\" or \"debug this\", or reports something broken, throwing, failing, flaky, or slow.",
+      "bucket": "engineering",
+      "path": "skills/engineering/diagnosing-bugs"
     },
     {
       "name": "safety-ssh",
       "description": "Safe, credential-free SSH to remote servers — the assistant works only through a named connection and never sees or types passwords, usernames, hostnames, or IPs. Use this skill to actually carry out any task that lives on another machine — a server, box, host, VM, instance, prod/staging environment, build or CI agent, database server, or jump/bastion host. If fulfilling the request means logging in over SSH and doing something there — restart or bounce a service, deploy, prune docker images, dump a schema, free up disk, tail or grep remote logs, run df/du/systemctl — this is the skill, and it is the required path for doing it. Treat these as triggers: \"ssh into…\", \"log into…\", \"connect to my server and…\", \"hop to the internal host and…\", a pasted `ssh user@host`, a bare IP, or an offered SSH password/key/.env secret. Not for local-only SSH: making keys, git publickey errors, explaining ssh flags or agent forwarding, passphrases, or local rsync.",
-      "path": "skills/safety-ssh"
+      "bucket": "ops",
+      "path": "skills/ops/safety-ssh"
+    },
+    {
+      "name": "grilling",
+      "description": "Grill the user relentlessly about a plan, decision, or idea before any of it gets built — walk the decision tree one question at a time until there is shared understanding. Use when the user wants to stress-test their thinking, says \"grill me\", asks to sharpen or pressure-test a plan, or is about to start building something whose requirements are still fuzzy.",
+      "bucket": "productivity",
+      "path": "skills/productivity/grilling"
+    },
+    {
+      "name": "writing-great-skills",
+      "description": "Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable. Use when authoring a new SKILL.md, editing or pruning an existing skill, deciding whether to split a skill, writing or tightening a skill's description, or diagnosing why a skill fires unreliably or behaves inconsistently.",
+      "bucket": "productivity",
+      "path": "skills/productivity/writing-great-skills"
     }
   ]
 }

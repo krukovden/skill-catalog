@@ -6,7 +6,7 @@ description: Review Azure DevOps pull requests via az CLI — fetch PR diff, ana
 # Skill: azure-reviewer
 
 ## Role
-You review Azure DevOps pull requests by fetching the diff via `az` CLI, analyzing the code against team standards, and posting user-approved comments back to the PR.
+You review Azure DevOps pull requests by fetching the diff via `az` CLI, analyzing it along **two independent axes** — **Spec** (does it do what the PR said?) and **Standards** (does it follow the repo's conventions and the smell baseline?) — and posting user-approved comments back to the PR.
 
 ## Prerequisites
 - `az login` completed (check with `az account show`)
@@ -63,7 +63,7 @@ Every observation gets exactly one tag:
 
 **Rules:**
 - Formatting and naming are almost never Blocking — reserve [B] for bugs, security, and data integrity
-- **[B] requires High confidence** — a real-but-uncertain concern is [S]/[N] with the uncertainty stated (see Step 5c). A false blocker costs more trust than a missed nit.
+- **[B] requires High confidence** — a real-but-uncertain concern is [S]/[N] with the uncertainty stated (see Step 5d). A false blocker costs more trust than a missed nit.
 - An edge case that actually crashes/corrupts is a **bug ([B])**, not a "missing edge case ([S])" — classify by impact, not by wording.
 - Include at least one [P] per review — only pointing out problems is demoralizing
 - **Read widely, comment narrowly:** read whatever unchanged code you need to understand the change, but only *post comments* on lines the PR changed — pre-existing issues go to the user as context or a separate issue.
@@ -173,31 +173,54 @@ The gate needs a **local clone** of the repo to run. It finds one automatically 
 
 The gate runs in a throwaway worktree and never touches the user's checkout. Add `--full` to also run `npm run build` / `dotnet build` when a deeper check is warranted (larger PRs, build-config changes).
 
-### Step 5: Analyze
+### Step 5: Analyze — two axes
 
 Review the overall design first — understand the forest before examining trees.
 
-**5a. Reconcile intent with implementation (do this FIRST — it catches the most).** The PR description, linked work items, and the user's stated goal are a contract. Break that contract into concrete claims and check **each one against the actual diff**:
+A change can pass one axis and fail the other, so the review runs as **two independent axes** and never collapses them into one judgement:
+
+- **Spec** — does the code faithfully implement what the PR description, work items, and the user's stated goal asked for?
+- **Standards** — does the code follow this repo's documented standards, plus the smell baseline?
+
+Code that follows every convention while implementing the wrong thing is **Standards pass, Spec fail**. Code that does exactly what the ticket asked while trampling the repo's conventions is the reverse. Reporting them separately is what stops one axis from masking the other.
+
+**Run the two axes as parallel sub-agents** (one message, two `Agent` calls, `general-purpose` type) so neither pollutes the other's context. Give each sub-agent: the changed-file list from Step 2, the fetched file contents/diffs from Step 4, and the `GATE:` result from Step 4b. Ask each for findings as `file`, `line`, `exact source line quoted`, `issue`, `suggested fix` — under 500 words — because Step 5e must anchor every one of them to a real line.
+
+- **Spec sub-agent** — also give it the PR description, linked work items, and the user's stated goal. Brief: report (a) claims the description made that the diff does not deliver or delivers only partly, (b) behaviour in the diff nobody asked for (scope creep), (c) claims that look implemented but where the implementation looks wrong. Quote the description line behind each finding.
+- **Standards sub-agent** — also give it the stack-specific skills loaded in Step 3 and the contents of [references/smell-baseline.md](references/smell-baseline.md) **pasted in full** (the sub-agent cannot read this skill's folder). Brief: report (a) every place the diff breaks a documented repo standard, citing the file and rule, and (b) any baseline smell, named, with the hunk quoted. Distinguish hard violations from judgement calls; a documented repo standard overrides the baseline; skip anything the Step 4b tooling already enforces.
+
+If the PR has no usable description or linked work item, skip the Spec sub-agent and say so in the report — do not silently fold its job into Standards.
+
+Sections 5a–5b below are the substance each axis works from; run them inside the matching sub-agent, or inline if you are reviewing a small PR without dispatching.
+
+**5a. Reconcile intent with implementation — the Spec axis (do this FIRST — it catches the most).** The PR description, linked work items, and the user's stated goal are a contract. Break that contract into concrete claims and check **each one against the actual diff**:
 
 - List every claim: each bug/AC in the description, and anything the user told you the PR should do.
 - For each, find the code that delivers it and ask: *does it actually do this — always, or only sometimes?* Watch for **"always" vs conditional**, "all X" vs "some X", "before Y" vs "after Y".
 - A gap between what was promised and what the code does is a finding — often the single most valuable one. (Classic example: the description says a reset is sent **always**, but the code only sends it under a condition — "always" ≠ "sometimes".)
 - If reconciling requires reading unchanged code (the dispatched command, the fault source, the type), read it (Step 4) before concluding.
 
-**5b. Evaluate each file across these lenses** (using the loaded skills):
+**5b. Evaluate each file across these lenses — the Standards axis** (using the loaded skills):
 
-- **Correctness** — Does the code do what the PR description says? Edge cases handled?
+- **Correctness** — Does the code hold together on its own terms? Edge cases handled?
 - **Async / races / ordering** — await gaps, fire-and-forget, state read right after an async write that hasn't settled, event-vs-command timing.
 - **Error handling** — Explicit at boundaries? Typed errors? Nothing swallowed silently? Locks/resources released on the throw path?
 - **Security** — Input validation, secrets, injection, auth checks.
 - **Architecture** — Layer violations, responsibility placement, dependency direction.
-- **SOLID / KISS / YAGNI / DRY** — principles from `enhanced-reviewer`.
+- **SOLID / KISS / YAGNI / DRY** — general design principles.
 - **Stack-specific** — Apply checks from the auto-detected skills loaded in Step 3.
 - **Tests** — Do tests cover the changes? Are edge cases and error paths tested?
+- **Smell baseline** — [references/smell-baseline.md](references/smell-baseline.md). Twelve Fowler smells that apply **even when the repo documents no standards at all**, bound by two rules: a documented repo standard overrides the baseline, and every baseline hit is a judgement call, never a hard violation.
 
-**5c. Self-verify every [B] before it survives.** A false blocker costs more trust than a missed nit. For each candidate blocker, actively try to **refute** it: re-read the exact lines, trace the values, check whether surrounding code already handles it. If you cannot make it fail concretely, downgrade it ([S]) or drop it. Assign each surviving finding a **confidence**: `High` (traced it, certain), `Med` (likely, some assumption), `Low` (worth raising, unsure). Only `High`-confidence issues may be `[B]`; a real-but-uncertain concern is `[S]`/`[N]` with the uncertainty stated.
+*"Does it match the description?" belongs to 5a, not here — asking it in both places is what collapses the two axes back into one.*
 
-**5d. Validate anchors (machine check).** Write the surviving findings to a findings TSV (`id⇥tag⇥file⇥line⇥quotedLine`, where `quotedLine` is the exact source line the comment targets) and run:
+**5c. Aggregate without reranking.** Merge the two axes into one findings list, tagging each finding with the axis it came from. Do **not** rerank findings across axes or let one axis's cleanliness offset the other's problems — that reranking is exactly what the separation exists to prevent. The Verdict in Step 6 is computed per axis: a `[B]` on either axis blocks.
+
+**5d. Self-verify every [B] before it survives.** A false blocker costs more trust than a missed nit. For each candidate blocker, actively try to **refute** it: re-read the exact lines, trace the values, check whether surrounding code already handles it. If you cannot make it fail concretely, downgrade it ([S]) or drop it. Assign each surviving finding a **confidence**: `High` (traced it, certain), `Med` (likely, some assumption), `Low` (worth raising, unsure). Only `High`-confidence issues may be `[B]`; a real-but-uncertain concern is `[S]`/`[N]` with the uncertainty stated.
+
+**5e. Validate anchors (machine check).** Write the surviving findings to a findings TSV (`id⇥tag⇥file⇥line⇥quotedLine`, where `quotedLine` is the exact source line the comment targets) and run:
+
+> The TSV stays five columns — `ado.sh` reads exactly these fields. The axis lives in the presentation table in Step 6, not in the TSV.
 
 ```bash
 <SKILL_DIR>/scripts/ado.sh anchor <FINDINGS_TSV> <REPO_ID> <SOURCE_SHA>
@@ -222,19 +245,25 @@ The findings table MUST include a **Comment** column with simple English explana
 <One line per description claim / AC / stated goal → ✅ delivered, or ⚠️ gap (which becomes a finding below)>
 
 ### Findings
-| # | Tag | Conf | File | Line | Issue | Suggested Fix | Comment |
-|---|-----|------|------|------|-------|---------------|---------|
-| 1 | [B] | High | auth.ts | 42 | No input validation | Add Zod schema | There is no check on user input. Bad data can break the system. Please add validation. |
-| 2 | [S] | Med | api.ts  | 15 | Unparameterized query | Use parameterized query | The query is built with string concatenation. This can cause SQL injection. Please use parameters. |
-| 3 | [N] | High | utils.ts | 8 | Unused import | Remove import | This import is not used anywhere. Please remove it to keep the code clean. |
-| 4 | [P] | — | auth.service.ts | 30 | Clean error hierarchy | — | Good job on the error handling. Clean and easy to follow. |
+| # | Axis | Tag | Conf | File | Line | Issue | Suggested Fix | Comment |
+|---|------|-----|------|------|------|-------|---------------|---------|
+| 1 | Spec | [B] | High | reset.ts | 88 | Description says the reset is always sent; code sends it only when `retry` is set | Send unconditionally, or correct the description | The description says this is always sent. The code only sends it sometimes. Please fix one of the two. |
+| 2 | Standards | [B] | High | auth.ts | 42 | No input validation | Add Zod schema | There is no check on user input. Bad data can break the system. Please add validation. |
+| 3 | Standards | [S] | Med | api.ts  | 15 | Unparameterized query | Use parameterized query | The query is built with string concatenation. This can cause SQL injection. Please use parameters. |
+| 4 | Standards | [N] | High | utils.ts | 8 | Unused import | Remove import | This import is not used anywhere. Please remove it to keep the code clean. |
+| 5 | Standards | [P] | — | auth.service.ts | 30 | Clean error hierarchy | — | Good job on the error handling. Clean and easy to follow. |
 
-`Conf` = confidence from Step 5c (High/Med/Low). Only `High` may be `[B]`.
+`Axis` = Spec or Standards (Step 5). `Conf` = confidence from Step 5d (High/Med/Low). Only `High` may be `[B]`.
+Sort within each axis; never rerank across them.
 
 ### Verdict
 <APPROVE / REQUEST CHANGES / COMMENT>
-- Approve only if zero [B] items
-- Request Changes if any [B] items remain
+- **Spec axis:** <N findings, worst tag> — or `no spec available` if the Spec sub-agent was skipped
+- **Standards axis:** <N findings, worst tag>
+- Approve only if zero [B] items **on both axes**
+- Request Changes if any [B] items remain on **either** axis
+
+State the worst issue **within each axis**; do not pick one winner across them — a clean Standards axis never offsets a Spec failure.
 
 ### Passed Checks
 - Build/lint gate: <PASS / FAIL / SKIPPED> (from checks.sh)
@@ -313,7 +342,8 @@ Clean up temp JSON + findings TSV files (`${TMPDIR:-/tmp}` / `$USERPROFILE`) aft
 - **Scope creep** — commenting on unchanged code. If pre-existing issues bother you, file a separate issue
 - **Diff in isolation** — judging a change without reading the unchanged code it depends on. Read the callee/type/interface before you conclude (Step 4, Step 5a)
 - **Taking the description on faith** — assuming the code does what the PR says. Reconcile each claim against the diff (Step 5a); "always" is not "sometimes"
-- **Confident-but-wrong blocker** — asserting a [B] you didn't verify. Try to refute every blocker first (Step 5c); if unsure, it's not [B]
+- **Confident-but-wrong blocker** — asserting a [B] you didn't verify. Try to refute every blocker first (Step 5d); if unsure, it's not [B]
+- **Collapsing the axes** — letting a clean Standards result read as "the PR is fine" when the Spec axis was skipped or failing. Report both, always, and keep them separate (Step 5c)
 - **Sequential API calls** — always batch file fetches in parallel. Never fetch one file at a time.
 
 ## Validation Checklist
@@ -323,10 +353,13 @@ Before presenting the review, confirm:
 - [ ] Step 4b gate run (`checks.sh`) and its result reflected in findings + Passed Checks
 - [ ] Existing threads checked (`ado.sh threads`) so no duplicate comments are posted
 - [ ] PR context understood (purpose, size, CI status)
+- [ ] **Both axes run** (Step 5): Spec and Standards each reported, or the Spec axis explicitly marked `no spec available`
 - [ ] **Intent reconciled** (Step 5a): every description claim / AC checked against the diff; gaps raised
+- [ ] **Smell baseline applied** (Step 5b): `references/smell-baseline.md` matched against the diff, repo standards taking precedence
+- [ ] **Axes not collapsed** (Step 5c): every finding tagged with its axis; verdict computed per axis, no cross-axis reranking
 - [ ] **Dependencies read** where needed to judge correctness (not just the changed files)
-- [ ] **Every [B] self-verified** (Step 5c) and is High confidence; each finding has a Conf value
-- [ ] **Anchors validated** (Step 5d): `ado.sh anchor` prints `ANCHORS OK` — no finding presented/posted with a failed anchor
+- [ ] **Every [B] self-verified** (Step 5d) and is High confidence; each finding has a Conf value
+- [ ] **Anchors validated** (Step 5e): `ado.sh anchor` prints `ANCHORS OK` — no finding presented/posted with a failed anchor
 - [ ] **Posts verified** (Step 8): `ado.sh verify-posted` shows every approved finding `POSTED` — no unverified `Posted` claims
 - [ ] Relevant skills auto-detected and loaded from file paths
 - [ ] All changed files reviewed (or highest-risk files for XL PRs)
