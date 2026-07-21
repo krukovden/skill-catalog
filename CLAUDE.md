@@ -75,13 +75,21 @@ Adapters are pure where it matters: `outputs(skill)` returns what *would* be wri
 what the tests assert against; `install()` performs the writes. Keep that split — a new
 adapter that only implements `install()` is untestable.
 
-Two behaviours are load-bearing and easy to break:
+Three behaviours are load-bearing and easy to break:
 
+- **The whole skill tree travels.** Every adapter installs every file the skill ships, not
+  just `SKILL.md`. A body that says "run `scripts/foo.sh`" is a promise the install has to
+  keep; dropping attachments leaves the agent pointed at files that do not exist.
 - **File modes are preserved on copy.** Skills ship executable helper scripts; installing
   them as `0644` makes the skill fail at runtime with "permission denied".
 - **The Codex `AGENTS.md` block is idempotent.** It is delimited by
   `<!-- skillcatalog:start -->` / `<!-- skillcatalog:end -->` and only that block is
   rewritten; unrelated user content in `AGENTS.md` must survive re-installs.
+
+Relative links inside a body are never rewritten by regex — bodies use several link styles
+and markdown rewriting is fragile. Copilot, whose instructions file lives away from the
+tree, instead gets a one-line preamble naming the base directory, plus substitution of the
+single literal `<SKILL_DIR>` placeholder.
 
 ## Evals
 

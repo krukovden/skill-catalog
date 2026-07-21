@@ -34,20 +34,33 @@ function tmpProject() {
 }
 
 // Self-contained fixture skill — tests don't depend on any catalog content.
-function makeFixtureSkill() {
+// The default body exercises both link styles a real skill uses: a markdown link into
+// references/ and the `<SKILL_DIR>` placeholder into scripts/.
+// `bare: true` ships SKILL.md and nothing else; `body` overrides the body text.
+function makeFixtureSkill({ bare = false, body = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-fixture-'));
   const dir = path.join(root, 'sample-skill');
-  fs.mkdirSync(path.join(dir, 'references'), { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
+
+  const text =
+    body ||
+    (bare
+      ? '# Sample Skill\n\nBody.'
+      : '# Sample Skill\n\nSee [notes](references/notes.md), then run `<SKILL_DIR>/scripts/run.sh`.');
   fs.writeFileSync(
     path.join(dir, 'SKILL.md'),
-    '---\nname: sample-skill\ndescription: A sample skill used by the test suite.\n---\n\n# Sample Skill\n\nBody.\n'
+    `---\nname: sample-skill\ndescription: A sample skill used by the test suite.\n---\n\n${text}\n`
   );
-  fs.writeFileSync(path.join(dir, 'references', 'notes.md'), 'notes\n');
-  // An executable helper script — used to verify installs preserve the +x mode.
-  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
-  const sh = path.join(dir, 'scripts', 'run.sh');
-  fs.writeFileSync(sh, '#!/usr/bin/env bash\necho hi\n');
-  fs.chmodSync(sh, 0o755);
+
+  if (!bare) {
+    fs.mkdirSync(path.join(dir, 'references'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'references', 'notes.md'), 'notes\n');
+    // An executable helper script — used to verify installs preserve the +x mode.
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    const sh = path.join(dir, 'scripts', 'run.sh');
+    fs.writeFileSync(sh, '#!/usr/bin/env bash\necho hi\n');
+    fs.chmodSync(sh, 0o755);
+  }
   return loadSkillFromDir(dir);
 }
 
@@ -116,6 +129,62 @@ test('install writes the instructions file', () => {
   copilot.install(skill, dir);
   const p = path.join(dir, '.github', 'instructions', 'sample-skill.instructions.md');
   assert.ok(fs.existsSync(p));
+});
+test('the whole tree travels — attachments are not dropped', () => {
+  const dir = tmpProject();
+  copilot.install(skill, dir);
+  const base = path.join(dir, '.github', 'skillcatalog', 'sample-skill');
+  // Every file the skill ships must land, SKILL.md included so intra-skill links resolve
+  // in both directions (a disclosed file linking back to SKILL.md).
+  for (const rel of skill.files) {
+    assert.ok(fs.existsSync(path.join(base, rel)), `${rel} was dropped`);
+  }
+});
+test('install preserves the executable bit on copied scripts', () => {
+  if (process.platform === 'win32') return;
+  const dir = tmpProject();
+  copilot.install(skill, dir);
+  const runSh = path.join(dir, '.github', 'skillcatalog', 'sample-skill', 'scripts', 'run.sh');
+  assert.ok(fs.statSync(runSh).mode & 0o111, 'installed script must stay executable');
+});
+test('a skill with attachments gets a base-path preamble', () => {
+  const [out] = copilot.outputs(skill);
+  assert.ok(copilot.hasAssets(skill));
+  assert.ok(
+    out.content.includes('.github/skillcatalog/sample-skill/'),
+    'preamble must name the asset directory so relative paths resolve'
+  );
+});
+test('a SKILL.md-only skill gets no preamble (no noise where nothing was installed)', () => {
+  const bare = makeFixtureSkill({ bare: true });
+  assert.ok(!copilot.hasAssets(bare));
+  const [out] = copilot.outputs(bare);
+  assert.ok(!out.content.includes('supporting files'), 'bare skill needs no preamble');
+});
+test('the <SKILL_DIR> placeholder resolves to the installed asset path', () => {
+  const withPlaceholder = makeFixtureSkill({ body: 'Run `<SKILL_DIR>/scripts/run.sh` now.' });
+  const [out] = copilot.outputs(withPlaceholder);
+  assert.ok(out.content.includes('`.github/skillcatalog/sample-skill/scripts/run.sh`'));
+  assert.ok(!out.content.includes('<SKILL_DIR>'), 'no placeholder may survive into the install');
+});
+test('every relative path the body references is actually installed', () => {
+  // The regression that motivated this adapter rewrite: the body pointed at scripts/ and
+  // references/ that the install never wrote.
+  const dir = tmpProject();
+  copilot.install(skill, dir);
+  const content = fs.readFileSync(
+    path.join(dir, '.github', 'instructions', 'sample-skill.instructions.md'),
+    'utf8'
+  );
+  const referenced = new Set(
+    [...content.matchAll(/(?:scripts|references)\/[A-Za-z0-9._-]+/g)].map((m) =>
+      m[0].replace(`${copilot.assetDir(skill)}/`, '')
+    )
+  );
+  for (const rel of referenced) {
+    const target = path.join(dir, '.github', 'skillcatalog', 'sample-skill', rel);
+    assert.ok(fs.existsSync(target), `body references ${rel} but it was not installed`);
+  }
 });
 
 console.log('codex adapter');

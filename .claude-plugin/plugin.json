@@ -1,7 +1,7 @@
 {
   "name": "skill-catalog",
   "description": "Extra skills extending Claude/Copilot/Codex base capabilities",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "skills": [
     "./skills/engineering/azure-reviewer",
     "./skills/engineering/diagnosing-bugs",
